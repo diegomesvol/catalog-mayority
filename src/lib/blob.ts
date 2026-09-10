@@ -43,7 +43,15 @@ const ARCHIVO_ORIGINAL_PENDIENTE_META_KEY = "catalogo-pending-original-meta.json
 
 async function leerJson<T>(key: string): Promise<T | null> {
   try {
-    const resultado = await get(key, { access: "private", useCache: false });
+    // useCache: true (antes false) — cada visita a "/" dispara hasta 3
+    // lecturas de acá (catálogo, colecciones, config) sin ningún caché de
+    // por medio, lo que agota rápido la cuota de OPERACIONES del plan
+    // Hobby de Vercel Blob con tráfico real. El caché propio de Blob se
+    // invalida solo al reescribir la misma key con put()/allowOverwrite
+    // (ver escribirJson), así que esto no cambia la frescura real: el
+    // catálogo publicado sigue reflejándose apenas el admin confirma un
+    // reemplazo, solo deja de pegarle a Blob en cada carga de página.
+    const resultado = await get(key, { access: "private", useCache: true });
     if (!resultado || resultado.statusCode !== 200) return null;
     const texto = await new Response(resultado.stream).text();
     return JSON.parse(texto) as T;
@@ -76,7 +84,9 @@ async function escribirJson(key: string, data: unknown): Promise<void> {
 
 async function leerBinario(key: string): Promise<ArrayBuffer | null> {
   try {
-    const resultado = await get(key, { access: "private", useCache: false });
+    // Mismo motivo que en leerJson — reduce operaciones de Blob sin perder
+    // frescura, porque se invalida solo al reescribir la misma key.
+    const resultado = await get(key, { access: "private", useCache: true });
     if (!resultado || resultado.statusCode !== 200) return null;
     return await new Response(resultado.stream).arrayBuffer();
   } catch (err) {
