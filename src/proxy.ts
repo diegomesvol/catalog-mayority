@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { COOKIE_SESION, tokenSesionValido } from "@/lib/auth";
+import { crearClienteProxy } from "@/lib/supabase";
+import { obtenerAdminActivo } from "@/lib/auth";
 
-// Protege todo /admin/* y /api/admin/* excepto la propia pantalla/endpoint de login.
-// (Next.js 16 renombró "middleware" a "proxy"; misma función, nuevo nombre de archivo.)
+// Protege todo /admin/* y /api/admin/* excepto la propia pantalla/endpoint de
+// login. (Next.js 16 renombró "middleware" a "proxy"; misma función, nuevo
+// nombre de archivo.) Runtime Edge — por eso crearClienteProxy (no
+// crearClienteServidor, que depende de next/headers).
 const RUTAS_PUBLICAS = ["/admin/login", "/api/admin/login"];
 
 export async function proxy(request: NextRequest) {
@@ -12,10 +15,15 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = request.cookies.get(COOKIE_SESION)?.value;
-  const autenticado = await tokenSesionValido(token);
+  // La response se crea ANTES de leer el admin y se devuelve al final: es
+  // donde crearClienteProxy escribe el refresco de cookies de sesión de
+  // Supabase — devolver una response distinta perdería ese refresco y
+  // desloguearía al admin en cuanto el access token expire.
+  const response = NextResponse.next();
+  const supabase = crearClienteProxy(request, response);
+  const admin = await obtenerAdminActivo(supabase);
 
-  if (!autenticado) {
+  if (!admin) {
     if (pathname.startsWith("/api/admin")) {
       return NextResponse.json({ ok: false, mensaje: "No autenticado" }, { status: 401 });
     }
@@ -25,7 +33,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  return NextResponse.next();
+  return response;
 }
 
 export const config = {
