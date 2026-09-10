@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { crearClienteNavegador } from "@/lib/supabase";
+import { crearClienteNavegador } from "@/lib/supabaseNavegador";
 import { definirPasswordSchema } from "@/lib/schemas/definirPassword";
 import { logError } from "@/lib/logger";
 

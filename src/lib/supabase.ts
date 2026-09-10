@@ -1,6 +1,7 @@
-// Clientes de Supabase para App Router. Reemplaza gradualmente la sesión
-// HMAC de admin único (src/lib/auth.ts) por Supabase Auth + admin_perfiles
-// (ver supabase/migrations/20260910000000_init_schema.sql).
+// Clientes de Supabase para App Router — SOLO SERVIDOR (depende de
+// next/headers). Nunca importar este archivo desde un "use client" — Next
+// arrastra next/headers al bundle del navegador y el build falla. El
+// cliente de navegador vive aparte, en lib/supabaseNavegador.ts.
 //
 // - crearClienteServidor: Server Components / Route Handlers (runtime Node),
 //   lee/escribe cookies vía next/headers.
@@ -9,7 +10,7 @@
 // - crearClienteServicio: rol de servicio (bypassa RLS). Solo para scripts
 //   o rutas admin de servidor; nunca exponer al cliente.
 
-import { createBrowserClient, createServerClient } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import type { NextRequest, NextResponse } from "next/server";
@@ -50,14 +51,6 @@ export function crearClienteProxy(request: NextRequest, response: NextResponse) 
       },
     },
   });
-}
-
-// Para Client Components — necesario para procesar el link de invitación/
-// recuperación de Supabase, que entrega el token en el fragmento de la URL
-// (#access_token=...), solo legible del lado del navegador. Sincroniza la
-// sesión en cookies (vía @supabase/ssr) para que el servidor la vea después.
-export function crearClienteNavegador() {
-  return createBrowserClient(SUPABASE_URL(), SUPABASE_ANON_KEY());
 }
 
 export function crearClienteServicio() {
