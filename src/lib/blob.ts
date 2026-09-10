@@ -6,6 +6,7 @@
 //  - catalogo-pending.json  -> resultado parseado de la última carga del admin,
 //                              a la espera de que confirme "Reemplazar catálogo"
 
+import { cache } from "react";
 import { del, get, list, put } from "@vercel/blob";
 import type { Catalogo, Coleccion, ConfigSitio, EntradaHistorial, GuiaTallas, ResumenImportacion } from "./types";
 import { logError, pistaBlob } from "./logger";
@@ -121,9 +122,15 @@ async function borrarSiExiste(key: string): Promise<void> {
   }
 }
 
-export async function leerCatalogoPublico(): Promise<Catalogo | null> {
+// cache() (React) memoiza por request: generateMetadata() y el Page de
+// /producto/[id] llaman esto por separado y, sin esto, cada visita a esa
+// ruta traía el catálogo entero DOS veces de Blob. No reduce el costo de
+// traer el catálogo completo en cada request (eso lo resuelve la migración
+// a Postgres, ver supabase/migrations/20260910000000_init_schema.sql) —
+// solo elimina la relectura redundante dentro de una misma request.
+export const leerCatalogoPublico = cache(async (): Promise<Catalogo | null> => {
   return leerJson<Catalogo>(CATALOGO_KEY);
-}
+});
 
 export interface MetaArchivoOriginal {
   nombreArchivo: string;
@@ -285,9 +292,10 @@ export async function revertirABackup(): Promise<Catalogo> {
 }
 
 /** Config actual de la guía de tallas (instrucciones + tabla). Nunca falta: si no se configuró aún, ambos campos vienen en null. */
-export async function leerGuiaTallas(): Promise<GuiaTallas> {
+// cache() — ver la nota sobre leerCatalogoPublico más arriba: mismo motivo.
+export const leerGuiaTallas = cache(async (): Promise<GuiaTallas> => {
   return (await leerJson<GuiaTallas>(GUIA_TALLAS_KEY)) ?? { instrucciones: null, tabla: null };
-}
+});
 
 export async function guardarGuiaTallas(guia: GuiaTallas): Promise<void> {
   await escribirJson(GUIA_TALLAS_KEY, guia);
@@ -335,9 +343,10 @@ export async function leerImagenPublica(pathname: string): Promise<{ stream: Rea
   }
 }
 
-export async function leerColecciones(): Promise<Coleccion[]> {
+// cache() — ver la nota sobre leerCatalogoPublico más arriba: mismo motivo.
+export const leerColecciones = cache(async (): Promise<Coleccion[]> => {
   return (await leerJson<Coleccion[]>(COLECCIONES_KEY)) ?? [];
-}
+});
 
 export async function guardarColecciones(colecciones: Coleccion[]): Promise<void> {
   await escribirJson(COLECCIONES_KEY, colecciones);
@@ -399,9 +408,12 @@ const CONFIG_SITIO_KEY = "config-sitio.json";
 
 export const CONFIG_SITIO_VACIA: ConfigSitio = { whatsappVentas: null, descripcionEmpresa: null, rif: null };
 
-export async function leerConfigSitio(): Promise<ConfigSitio> {
+// cache() — layout.tsx, page.tsx y producto/[id]/page.tsx llaman esto cada
+// uno por su cuenta dentro de la misma request (config del footer). Sin
+// esto eran hasta 3 lecturas idénticas de config-sitio.json por visita.
+export const leerConfigSitio = cache(async (): Promise<ConfigSitio> => {
   return (await leerJson<ConfigSitio>(CONFIG_SITIO_KEY)) ?? CONFIG_SITIO_VACIA;
-}
+});
 
 export async function guardarConfigSitio(config: ConfigSitio): Promise<void> {
   await escribirJson(CONFIG_SITIO_KEY, config);
