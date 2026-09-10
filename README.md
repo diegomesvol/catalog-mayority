@@ -204,11 +204,15 @@ datos que vienen del SAP:
   que ese filtro no tendría nada que mostrar ahí. Esos casos se ven en el
   resumen de `/admin` al momento de cargar el archivo, no en el catálogo
   público.
-- **Tamaño de archivo:** el archivo (CSV/XLSX/XLS/XLSM) se sube directo del
-  navegador a Vercel Blob (`@vercel/blob/client`, ver
-  `/api/admin/upload-token`) antes de procesarse — no pasa por el límite de
-  ~4.5 MB de body de las funciones serverless. El único tope es el
-  resguardo de 250 MB en `CargadorCatalogo.tsx`, ajustable si hiciera falta.
+- **Tamaño de archivo:** el archivo (CSV/XLSX/XLS/XLSM) pasa por la función
+  serverless `/api/admin/upload`, sujeta al límite real de body de Vercel
+  (~4.5 MB) — `CargadorCatalogo.tsx` lo bloquea antes en 4 MB, con margen.
+  Existe un camino de subida directa del navegador a Vercel Blob
+  (`@vercel/blob/client`, `/api/admin/upload-token`) que evitaría ese
+  límite, pero está sin usar: Vercel devuelve esas respuestas sin cabecera
+  CORS en este proyecto (bug de su lado, reportado en su foro de
+  comunidad — no de este código). Ver el comentario en
+  `CargadorCatalogo.tsx` para el detalle.
 
 ## Estructura del proyecto
 

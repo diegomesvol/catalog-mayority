@@ -7,6 +7,12 @@ import { logError, pistaBlob } from "@/lib/logger";
 // las funciones serverless (~4.5 MB). La ruta ya está protegida por
 // src/proxy.ts (matcher /api/admin/:path*) — solo un admin autenticado
 // llega hasta acá.
+//
+// SIN USAR ACTUALMENTE: Vercel devuelve estas respuestas sin cabecera CORS
+// en este proyecto (bug de su lado, reportado en su foro de comunidad, no
+// de este código) — ver el comentario en CargadorCatalogo.tsx. Mientras
+// tanto la subida real pasa por /api/admin/upload con un límite de 4 MB.
+// No borrar: queda lista para retomarse apenas Vercel lo resuelva.
 export async function POST(request: Request): Promise<NextResponse> {
   const body = (await request.json()) as HandleUploadBody;
 

@@ -170,6 +170,30 @@ describe("transformarFilas — agrupación en 3 niveles", () => {
   });
 });
 
+describe("transformarFilas — parseo de precio (coma decimal vs miles)", () => {
+  it.each([
+    ["12,50", 12.5], // coma decimal (2 dígitos) — antes se leía como 1250
+    ["12,5", 12.5], // coma decimal (1 dígito)
+    ["1,250", 1250], // coma de miles (grupo de 3) — comportamiento previo, no debe cambiar
+    ["1,250,000", 1250000], // miles con más de un grupo
+    ["1.250,50", 1250.5], // punto de miles + coma decimal (formato es-VE típico)
+    ["1,250.50", 1250.5], // coma de miles + punto decimal (formato en-US)
+    ["50", 50], // sin separadores
+    ["50.5", 50.5], // punto decimal simple, sin coma
+  ])("interpreta \"%s\" como %f", (crudo, esperado) => {
+    const fila = filaCalzado({ "PV Fabrica": crudo });
+    const { catalogo, resumen } = transformarFilas([fila], 1);
+    expect(resumen.errores).toEqual([]);
+    expect(catalogo!.productos[0].colores[0].precio).toBe(esperado);
+  });
+
+  it("acepta el precio ya como número (celda numérica de Excel), sin pasar por el parseo de texto", () => {
+    const fila = filaCalzado({ "PV Fabrica": 12.5 });
+    const { catalogo } = transformarFilas([fila], 1);
+    expect(catalogo!.productos[0].colores[0].precio).toBe(12.5);
+  });
+});
+
 describe("transformarFilas — precio representativo del color", () => {
   it("usa el precio más frecuente entre las curvas del color", () => {
     const filas = [
