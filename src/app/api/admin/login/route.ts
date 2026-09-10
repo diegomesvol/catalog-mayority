@@ -16,11 +16,6 @@ export async function POST(request: NextRequest) {
     const supabase = await crearClienteServidor();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      // Logging temporal de diagnóstico: el mensaje genérico al cliente no
-      // dice POR QUÉ Supabase rechazó el login (credenciales, rate limit,
-      // API key de otro proyecto...) — esto sí queda en los Runtime Logs de
-      // Vercel. Sacar una vez resuelto.
-      logError("api/admin/login (signInWithPassword)", error, `status=${error.status} code=${error.code}`);
       return NextResponse.json({ ok: false, mensaje: "Email o contraseña incorrectos." }, { status: 401 });
     }
 
