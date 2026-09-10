@@ -9,7 +9,7 @@
 // - crearClienteServicio: rol de servicio (bypassa RLS). Solo para scripts
 //   o rutas admin de servidor; nunca exponer al cliente.
 
-import { createServerClient } from "@supabase/ssr";
+import { createBrowserClient, createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import type { NextRequest, NextResponse } from "next/server";
@@ -50,6 +50,14 @@ export function crearClienteProxy(request: NextRequest, response: NextResponse) 
       },
     },
   });
+}
+
+// Para Client Components — necesario para procesar el link de invitación/
+// recuperación de Supabase, que entrega el token en el fragmento de la URL
+// (#access_token=...), solo legible del lado del navegador. Sincroniza la
+// sesión en cookies (vía @supabase/ssr) para que el servidor la vea después.
+export function crearClienteNavegador() {
+  return createBrowserClient(SUPABASE_URL(), SUPABASE_ANON_KEY());
 }
 
 export function crearClienteServicio() {
