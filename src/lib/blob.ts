@@ -369,7 +369,30 @@ export async function subirImagenColeccion(nombre: string, bytes: ArrayBuffer, c
 // El nombre de archivo es el id (timestamp en ms): al ser todos del mismo
 // largo mientras dure este milenio, ordenar por nombre = ordenar por fecha.
 const HISTORIAL_PREFIJO = "historial/";
-const HISTORIAL_LIMITE_LISTADO = 50; // más que suficiente para lo que el panel muestra; evita listar sin límite si el historial crece mucho
+// Tope de cuántas cargas se conservan en Blob. Antes no había purga: cada
+// carga confirmada o revertida agregaba UN archivo nuevo bajo este prefijo
+// para siempre, así que el store acumulaba miles de archivos con el uso
+// normal del panel. Ahora agregarEntradaHistorial() borra lo que sobre por
+// encima de este tope apenas escribe la entrada nueva — así nunca hay más de
+// HISTORIAL_MAX archivos bajo el prefijo, y list() de acá abajo, con ese
+// mismo límite, siempre alcanza para traer el historial completo existente
+// (sin depender de en qué orden lo devuelva la API de Blob).
+const HISTORIAL_MAX = 100;
+
+async function purgarHistorialViejo(): Promise<void> {
+  try {
+    const { blobs } = await list({ prefix: HISTORIAL_PREFIJO, limit: 1000 });
+    if (blobs.length <= HISTORIAL_MAX) return;
+    const ordenados = [...blobs].sort((a, b) => (a.pathname < b.pathname ? 1 : -1)); // más nuevo primero
+    const sobrantes = ordenados.slice(HISTORIAL_MAX);
+    await Promise.all(sobrantes.map((b) => borrarSiExiste(b.pathname)));
+  } catch (err) {
+    // No crítico: el historial simplemente queda un poco más grande de lo
+    // ideal hasta la próxima carga, que vuelve a intentar la purga.
+    const mensaje = err instanceof Error ? err.message : String(err);
+    logError("lib/blob.purgarHistorialViejo", err, pistaBlob(mensaje));
+  }
+}
 
 async function agregarEntradaHistorial(entrada: EntradaHistorial): Promise<void> {
   try {
@@ -379,13 +402,15 @@ async function agregarEntradaHistorial(entrada: EntradaHistorial): Promise<void>
     // en sí ya quedó publicado; solo se pierde ese registro del historial.
     const mensaje = err instanceof Error ? err.message : String(err);
     logError("lib/blob.agregarEntradaHistorial", err, pistaBlob(mensaje));
+    return;
   }
+  await purgarHistorialViejo();
 }
 
 /** Las cargas confirmadas más recientes primero (más nuevo primero). */
 export async function leerHistorial(limite = 20): Promise<EntradaHistorial[]> {
   try {
-    const { blobs } = await list({ prefix: HISTORIAL_PREFIJO, limit: HISTORIAL_LIMITE_LISTADO });
+    const { blobs } = await list({ prefix: HISTORIAL_PREFIJO, limit: HISTORIAL_MAX });
     const ordenados = [...blobs].sort((a, b) => (a.pathname < b.pathname ? 1 : -1));
     const entradas = await Promise.all(
       ordenados.slice(0, limite).map((b) => leerJson<EntradaHistorial>(b.pathname)),

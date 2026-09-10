@@ -273,13 +273,20 @@ function ItemCarritoFila({
             <input
               type="number"
               min={1}
+              max={item.stockDisponible}
               inputMode="numeric"
               value={item.cantidad}
               onChange={(e) => cambiarCantidad(e.target.value)}
               aria-label={item.esCalzado ? "Cantidad de bultos" : "Cantidad de unidades"}
               className="w-10 border-x border-ink-200 py-1 text-center text-xs"
             />
-            <button type="button" onClick={() => onCantidad(item.cantidad + 1)} aria-label="Sumar" className="px-2 py-1 text-ink-700 hover:text-ink-900">
+            <button
+              type="button"
+              onClick={() => onCantidad(item.cantidad + 1)}
+              disabled={item.cantidad >= item.stockDisponible}
+              aria-label="Sumar"
+              className="px-2 py-1 text-ink-700 hover:text-ink-900 disabled:cursor-not-allowed disabled:text-ink-300 disabled:hover:text-ink-300"
+            >
               +
             </button>
           </div>
@@ -287,6 +294,9 @@ function ItemCarritoFila({
             {item.esCalzado ? `${item.cantidad} bulto${item.cantidad === 1 ? "" : "s"} · ${unidadesDelItem(item)} pares` : `${item.cantidad} unidad${item.cantidad === 1 ? "" : "es"}`}
           </span>
         </div>
+        {item.cantidad >= item.stockDisponible && (
+          <span className="text-[11px] text-ink-500">Máximo disponible en stock.</span>
+        )}
         <span className="self-end text-sm font-medium text-ink-900">{formatearPrecio(subtotalDelItem(item))}</span>
       </div>
     </li>

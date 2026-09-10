@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useCarrito } from "@/components/carrito/CarritoContext";
 import { esCalzado } from "@/lib/transform";
 import { armarItemId } from "@/lib/carrito";
+import { unidadesDisponiblesCurva } from "@/lib/producto";
 import type { Curva, Producto, VarianteColor } from "@/lib/types";
 
 interface Props {
@@ -30,10 +31,11 @@ interface Props {
 // ese scroll — el toast + el contador del botón "Pedido" ya avisan que se
 // agregó, sin interrumpir.
 export function AgregarCarritoCard({ producto, color, curva, disponible }: Props) {
-  const { agregarItem, abrir } = useCarrito();
+  const { agregarItem, abrir, items } = useCarrito();
   const calzado = esCalzado(producto.rubro);
   const [agregado, setAgregado] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const itemId = armarItemId(producto.id, color.color, curva.id);
 
   useEffect(() => {
     return () => {
@@ -49,9 +51,21 @@ export function AgregarCarritoCard({ producto, color, curva, disponible }: Props
     e.stopPropagation();
     if (!disponible) return;
 
+    // El botón queda habilitado mientras la curva tenga stock (disponible),
+    // pero eso no dice si YA se agregó todo lo que hay — se chequea acá
+    // contra lo que ya está en el carrito para avisar con un mensaje
+    // correcto en vez de mostrar "agregado" cuando en realidad no sumó nada
+    // (agregarItem igual lo acotaría del lado del contexto).
+    const stockDisponible = unidadesDisponiblesCurva(curva);
+    const yaEnCarrito = items.find((i) => i.itemId === itemId)?.cantidad ?? 0;
+    if (yaEnCarrito >= stockDisponible) {
+      toast.error("Ya agregaste todo el stock disponible de esta curva.");
+      return;
+    }
+
     agregarItem(
       {
-        itemId: armarItemId(producto.id, color.color, curva.id),
+        itemId,
         productoId: producto.id,
         modelo: producto.modelo,
         marca: producto.marca,
@@ -63,6 +77,7 @@ export function AgregarCarritoCard({ producto, color, curva, disponible }: Props
         precio: color.precio,
         cantidadPorBulto: curva.cantidadPorBulto,
         esCalzado: calzado,
+        stockDisponible,
       },
       1,
       { abrirDrawer: false },

@@ -102,16 +102,25 @@ export function CarritoProvider({ children, numeroWhatsApp: numeroConfigurado }:
       // mergean entre sí (ver lib/carrito.ts).
       const existente = prev.find((i) => i.itemId === item.itemId);
       if (existente) {
-        return prev.map((i) => (i.itemId === item.itemId ? { ...i, cantidad: i.cantidad + cantidad } : i));
+        // stockDisponible se refresca al valor recién calculado (item.stockDisponible)
+        // por si cambió desde que se agregó esta línea por primera vez.
+        const nuevaCantidad = Math.min(existente.cantidad + cantidad, item.stockDisponible);
+        return prev.map((i) => (i.itemId === item.itemId ? { ...i, stockDisponible: item.stockDisponible, cantidad: nuevaCantidad } : i));
       }
-      return [...prev, { ...item, cantidad }];
+      // Nunca se agrega una línea con cantidad 0 (curva sin stock real).
+      const cantidadInicial = Math.min(cantidad, item.stockDisponible);
+      return cantidadInicial > 0 ? [...prev, { ...item, cantidad: cantidadInicial }] : prev;
     });
     if (opciones?.abrirDrawer ?? true) setAbierto(true);
   }, []);
 
   const actualizarCantidad = useCallback((itemId: string, cantidad: number) => {
     setItems((prev) =>
-      cantidad <= 0 ? prev.filter((i) => i.itemId !== itemId) : prev.map((i) => (i.itemId === itemId ? { ...i, cantidad } : i)),
+      prev.flatMap((i) => {
+        if (i.itemId !== itemId) return [i];
+        const acotada = Math.min(cantidad, i.stockDisponible);
+        return acotada <= 0 ? [] : [{ ...i, cantidad: acotada }];
+      }),
     );
   }, []);
 
