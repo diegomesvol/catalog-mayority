@@ -135,16 +135,18 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, resumen, diff });
   } catch (err) {
-    const mensaje = err instanceof Error ? err.message : "Error inesperado al procesar el archivo.";
-    logError("api/admin/upload", err, pistaBlob(mensaje));
+    const detalle = err instanceof Error ? err.message : String(err);
+    logError("api/admin/upload", err, pistaBlob(detalle));
 
     // El body de una función serverless de Vercel no puede superar ~4.5 MB —
     // Next.js corta la conexión y esto suele llegar acá como un error de
-    // parseo del body en vez de un mensaje claro.
-    const pista = /body|payload|exceeds|too large/i.test(mensaje)
-      ? " El archivo probablemente pesa más de 4.5 MB (el límite de las funciones serverless de Vercel) — probá con un archivo más liviano."
-      : "";
+    // parseo del body en vez de un mensaje claro. El detalle interno
+    // (`detalle`) solo se usa para detectar ese caso y para el log — nunca
+    // se manda crudo al cliente.
+    const mensaje = /body|payload|exceeds|too large/i.test(detalle)
+      ? "El archivo probablemente pesa más de 4.5 MB (el límite de las funciones serverless de Vercel) — probá con un archivo más liviano."
+      : "Error inesperado al procesar el archivo.";
 
-    return NextResponse.json({ ok: false, mensaje: mensaje + pista }, { status: 500 });
+    return NextResponse.json({ ok: false, mensaje }, { status: 500 });
   }
 }

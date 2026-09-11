@@ -23,7 +23,7 @@ type Errores = Partial<Record<keyof DatosComprador, string>>;
 // todo el pedido, así que ahora pide confirmar antes de ejecutar.
 function confirmarVaciar(alConfirmar: () => void) {
   toast("¿Vaciar todo el pedido?", {
-    description: "Se van a quitar todos los productos agregados. Esta acción no se puede deshacer.",
+    description: "Quitarás todos los productos agregados. Esta acción no se puede deshacer.",
     duration: Infinity,
     action: { label: "Vaciar", onClick: () => alConfirmar() },
     cancel: { label: "Cancelar", onClick: () => {} },

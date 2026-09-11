@@ -22,9 +22,9 @@ export async function POST() {
       totalVariantes: catalogo.totalVariantes,
     });
   } catch (err) {
-    const mensaje = err instanceof Error ? err.message : "No se pudo revertir al respaldo.";
-    logError("api/admin/revert", err, pistaBlob(mensaje));
-    return NextResponse.json({ ok: false, mensaje }, { status: 400 });
+    const detalle = err instanceof Error ? err.message : String(err);
+    logError("api/admin/revert", err, pistaBlob(detalle));
+    return NextResponse.json({ ok: false, mensaje: "No se pudo revertir al respaldo." }, { status: 400 });
   } finally {
     await liberarLockCatalogo(supabase, token);
   }

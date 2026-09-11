@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { logError } from "@/lib/logger";
+import { fetchJson } from "@/lib/apiCliente";
 
 interface Props {
   // true mientras otra operación crítica (confirmar reemplazo) está en
@@ -36,10 +37,11 @@ export function RevertirRespaldo({ bloqueadoPorOtraOperacion, onOperacionCritica
     onOperacionCriticaChange?.(true);
     const idCarga = toast.loading("Revirtiendo al respaldo…");
     try {
-      const resp = await fetch("/api/admin/revert", { method: "POST" });
-      const data = await resp.json();
-      if (!resp.ok || !data.ok) {
-        toast.error(data.mensaje ?? "No se pudo revertir al respaldo.", { id: idCarga });
+      const { resp, data } = await fetchJson<{ ok: boolean; totalProductos?: number; mensaje?: string }>("/api/admin/revert", {
+        method: "POST",
+      });
+      if (!resp.ok || !data || !data.ok) {
+        toast.error(data?.mensaje ?? "No se pudo revertir al respaldo.", { id: idCarga });
         setEstado("inicial");
         return;
       }

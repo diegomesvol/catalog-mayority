@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { toast } from "sonner";
 import { logError } from "@/lib/logger";
+import { fetchJson } from "@/lib/apiCliente";
 import { prepararImagenParaSubir } from "@/lib/imagenCliente";
 import { ImagenProducto } from "@/components/catalogo/ImagenProducto";
 import type { Coleccion, FiltroColeccion } from "@/lib/types";
@@ -132,28 +133,18 @@ export function ColeccionesConfig({ opciones, coleccionesIniciales }: { opciones
       const archivo = await prepararImagenParaSubir(archivoOriginal);
       const formData = new FormData();
       formData.set("archivo", archivo);
-      const resp = await fetch("/api/admin/colecciones/imagen", { method: "POST", body: formData });
+      const { resp, data } = await fetchJson<{ ok: boolean; url?: string; mensaje?: string }>("/api/admin/colecciones/imagen", {
+        method: "POST",
+        body: formData,
+      });
 
-      if (!resp.ok) {
+      if (!resp.ok || !data || !data.ok || !data.url) {
         // Un 413 (o cualquier otro corte antes de llegar a nuestro route
-        // handler) no siempre trae JSON — leerlo como texto primero evita
-        // el "Unexpected token" al intentar parsear HTML/texto plano.
-        const texto = await resp.text();
-        let mensaje =
+        // handler) no siempre trae JSON — fetchJson ya devuelve data: null
+        // en ese caso, así que se cae al mensaje genérico según el status.
+        const fallback =
           resp.status === 413 ? "La imagen sigue pesando demasiado — probá con otra o recortala." : "No se pudo subir la imagen.";
-        try {
-          const data = JSON.parse(texto) as { mensaje?: string };
-          if (data.mensaje) mensaje = data.mensaje;
-        } catch {
-          // No era JSON — se queda con el mensaje genérico de arriba.
-        }
-        toast.error(mensaje);
-        return;
-      }
-
-      const data = (await resp.json()) as { ok: boolean; url?: string; mensaje?: string };
-      if (!data.ok || !data.url) {
-        toast.error(data.mensaje ?? "No se pudo subir la imagen.");
+        toast.error(data?.mensaje ?? fallback);
         return;
       }
       actualizar(id, { imagenUrl: data.url });
@@ -178,14 +169,13 @@ export function ColeccionesConfig({ opciones, coleccionesIniciales }: { opciones
 
     setGuardando(true);
     try {
-      const resp = await fetch("/api/admin/colecciones", {
+      const { resp, data } = await fetchJson<{ ok: boolean; colecciones?: Coleccion[]; mensaje?: string }>("/api/admin/colecciones", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(colecciones),
       });
-      const data = (await resp.json()) as { ok: boolean; colecciones?: Coleccion[]; mensaje?: string };
-      if (!resp.ok || !data.ok || !data.colecciones) {
-        toast.error(data.mensaje ?? "No se pudieron guardar las colecciones.");
+      if (!resp.ok || !data || !data.ok || !data.colecciones) {
+        toast.error(data?.mensaje ?? "No se pudieron guardar las colecciones.");
         return;
       }
       // Guardado exitoso = ya no queda ningún formulario abierto: TODO lo

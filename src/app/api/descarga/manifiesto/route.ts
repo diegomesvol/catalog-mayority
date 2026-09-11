@@ -98,8 +98,9 @@ export async function GET(request: NextRequest) {
       imagenes: Array.from(imagenes),
     });
   } catch (err) {
-    const mensaje = err instanceof Error ? err.message : "No se pudo generar el manifiesto de descarga.";
     logError("api/descarga/manifiesto GET", err);
-    return NextResponse.json({ ok: false, mensaje }, { status: 500 });
+    // Ruta pública (no pasa por el proxy de auth) — nunca se expone el
+    // detalle interno del error a un visitante anónimo.
+    return NextResponse.json({ ok: false, mensaje: "No se pudo generar el manifiesto de descarga." }, { status: 500 });
   }
 }

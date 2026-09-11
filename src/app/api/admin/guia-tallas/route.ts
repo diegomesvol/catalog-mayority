@@ -18,9 +18,9 @@ export async function GET() {
     const guia = await leerGuiaTallas();
     return NextResponse.json({ ok: true, guia });
   } catch (err) {
-    const mensaje = err instanceof Error ? err.message : "No se pudo leer la guía de tallas.";
-    logError("api/admin/guia-tallas GET", err, pistaBlob(mensaje));
-    return NextResponse.json({ ok: false, mensaje }, { status: 500 });
+    const detalle = err instanceof Error ? err.message : String(err);
+    logError("api/admin/guia-tallas GET", err, pistaBlob(detalle));
+    return NextResponse.json({ ok: false, mensaje: "No se pudo leer la guía de tallas." }, { status: 500 });
   }
 }
 
@@ -69,8 +69,8 @@ export async function POST(request: NextRequest) {
     await guardarGuiaTallas(nueva);
     return NextResponse.json({ ok: true, guia: nueva });
   } catch (err) {
-    const mensaje = err instanceof Error ? err.message : "No se pudo guardar la guía de tallas.";
-    logError("api/admin/guia-tallas POST", err, pistaBlob(mensaje));
-    return NextResponse.json({ ok: false, mensaje }, { status: 500 });
+    const detalle = err instanceof Error ? err.message : String(err);
+    logError("api/admin/guia-tallas POST", err, pistaBlob(detalle));
+    return NextResponse.json({ ok: false, mensaje: "No se pudo guardar la guía de tallas." }, { status: 500 });
   }
 }

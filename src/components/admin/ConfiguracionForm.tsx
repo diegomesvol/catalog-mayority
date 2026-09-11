@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { logError } from "@/lib/logger";
+import { fetchJson } from "@/lib/apiCliente";
 import type { ConfigSitio } from "@/lib/types";
 import {
   DESCRIPCION_EMPRESA_MAX,
@@ -35,10 +36,9 @@ export function ConfiguracionForm() {
     let cancelado = false;
     (async () => {
       try {
-        const resp = await fetch("/api/admin/config");
-        const data = (await resp.json()) as { ok: boolean; config?: ConfigSitio; mensaje?: string };
-        if (!resp.ok || !data.ok || !data.config) {
-          throw new Error(data.mensaje ?? "No se pudo cargar la configuración actual.");
+        const { resp, data } = await fetchJson<{ ok: boolean; config?: ConfigSitio; mensaje?: string }>("/api/admin/config");
+        if (!resp.ok || !data || !data.ok || !data.config) {
+          throw new Error(data?.mensaje ?? "No se pudo cargar la configuración actual.");
         }
         if (!cancelado) setGuardado(data.config);
       } catch (err) {
@@ -92,17 +92,16 @@ export function ConfiguracionForm() {
 
     setGuardando(true);
     try {
-      const resp = await fetch("/api/admin/config", {
+      const { resp, data } = await fetchJson<{ ok: boolean; config?: ConfigSitio; mensaje?: string }>("/api/admin/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(campos),
       });
-      const data = (await resp.json()) as { ok: boolean; config?: ConfigSitio; mensaje?: string };
-      if (!resp.ok || !data.ok || !data.config) {
+      if (!resp.ok || !data || !data.ok || !data.config) {
         // Esto solo debería pasar por algo que el form no pudo anticipar
         // (ej. se cayó la conexión a mitad de camino) — la validación de
         // campo ya cubrió los casos previsibles antes de llegar acá.
-        toast.error(data.mensaje ?? "No se pudo guardar la configuración.");
+        toast.error(data?.mensaje ?? "No se pudo guardar la configuración.");
         return;
       }
       setGuardado(data.config);

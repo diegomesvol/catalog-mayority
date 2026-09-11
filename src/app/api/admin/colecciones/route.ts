@@ -57,9 +57,9 @@ export async function GET() {
     const colecciones = await leerColecciones();
     return NextResponse.json({ ok: true, colecciones });
   } catch (err) {
-    const mensaje = err instanceof Error ? err.message : "No se pudieron leer las colecciones.";
-    logError("api/admin/colecciones GET", err, pistaBlob(mensaje));
-    return NextResponse.json({ ok: false, mensaje }, { status: 500 });
+    const detalle = err instanceof Error ? err.message : String(err);
+    logError("api/admin/colecciones GET", err, pistaBlob(detalle));
+    return NextResponse.json({ ok: false, mensaje: "No se pudieron leer las colecciones." }, { status: 500 });
   }
 }
 
@@ -74,8 +74,8 @@ export async function POST(request: NextRequest) {
     await guardarColecciones(validacion.colecciones);
     return NextResponse.json({ ok: true, colecciones: validacion.colecciones });
   } catch (err) {
-    const mensaje = err instanceof Error ? err.message : "No se pudieron guardar las colecciones.";
-    logError("api/admin/colecciones POST", err, pistaBlob(mensaje));
-    return NextResponse.json({ ok: false, mensaje }, { status: 500 });
+    const detalle = err instanceof Error ? err.message : String(err);
+    logError("api/admin/colecciones POST", err, pistaBlob(detalle));
+    return NextResponse.json({ ok: false, mensaje: "No se pudieron guardar las colecciones." }, { status: 500 });
   }
 }

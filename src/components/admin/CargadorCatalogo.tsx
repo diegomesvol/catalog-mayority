@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import type { DiffCatalogo, ResumenImportacion } from "@/lib/types";
 import { logError } from "@/lib/logger";
+import { fetchJson } from "@/lib/apiCliente";
 import { ResumenPrevio } from "./ResumenPrevio";
 import { GuiaColumnas } from "./GuiaColumnas";
 import { TablaErrores } from "./TablaErrores";
@@ -96,23 +97,25 @@ export function CargadorCatalogo({ bloqueadoPorOtraOperacion, onOperacionCritica
         return;
       }
 
-      const resp = await fetch("/api/admin/upload", { method: "POST", body: formData });
-      const data = await resp.json();
+      const { resp, data } = await fetchJson<{ ok: boolean; resumen?: ResumenImportacion; diff?: DiffCatalogo; mensaje?: string }>(
+        "/api/admin/upload",
+        { method: "POST", body: formData },
+      );
 
       if (!resp.ok) {
-        if (data.resumen) {
-          setResumen(data.resumen as ResumenImportacion);
+        if (data?.resumen) {
+          setResumen(data.resumen);
           setEstado("rechazado");
           toast.error("Archivo rechazado — revisá el detalle.", { id: idCarga });
         } else {
-          toast.error(data.mensaje ?? "No se pudo procesar el archivo.", { id: idCarga });
+          toast.error(data?.mensaje ?? "No se pudo procesar el archivo.", { id: idCarga });
           setEstado("inicial");
         }
         return;
       }
 
-      setResumen(data.resumen as ResumenImportacion);
-      setDiff((data.diff as DiffCatalogo) ?? null);
+      setResumen(data?.resumen ?? null);
+      setDiff(data?.diff ?? null);
       setEstado("previsualizando");
       toast.success("Archivo analizado. Revisá el resumen antes de confirmar.", { id: idCarga });
     } catch (err) {
@@ -128,10 +131,12 @@ export function CargadorCatalogo({ bloqueadoPorOtraOperacion, onOperacionCritica
     onOperacionCriticaChange?.(true);
     const idCarga = toast.loading("Reemplazando catálogo…");
     try {
-      const resp = await fetch("/api/admin/confirm", { method: "POST" });
-      const data = await resp.json();
-      if (!resp.ok || !data.ok) {
-        toast.error(data.mensaje ?? "No se pudo confirmar el reemplazo.", { id: idCarga });
+      const { resp, data } = await fetchJson<{ ok: boolean; totalProductos?: number; totalVariantes?: number; mensaje?: string }>(
+        "/api/admin/confirm",
+        { method: "POST" },
+      );
+      if (!resp.ok || !data || !data.ok) {
+        toast.error(data?.mensaje ?? "No se pudo confirmar el reemplazo.", { id: idCarga });
         setEstado("previsualizando");
         return;
       }

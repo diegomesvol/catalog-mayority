@@ -43,8 +43,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     });
     return NextResponse.json(jsonResponse);
   } catch (err) {
-    const mensaje = err instanceof Error ? err.message : "No se pudo autorizar la subida del archivo.";
-    logError("api/admin/upload-token", err, pistaBlob(mensaje));
-    return NextResponse.json({ error: mensaje }, { status: 400 });
+    const detalle = err instanceof Error ? err.message : String(err);
+    logError("api/admin/upload-token", err, pistaBlob(detalle));
+    return NextResponse.json({ error: "No se pudo autorizar la subida del archivo." }, { status: 400 });
   }
 }

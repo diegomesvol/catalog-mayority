@@ -13,9 +13,9 @@ export async function GET() {
     const config = await leerConfigSitio();
     return NextResponse.json({ ok: true, config });
   } catch (err) {
-    const mensaje = err instanceof Error ? err.message : "No se pudo leer la configuración.";
-    logError("api/admin/config GET", err, pistaBlob(mensaje));
-    return NextResponse.json({ ok: false, mensaje }, { status: 500 });
+    const detalle = err instanceof Error ? err.message : String(err);
+    logError("api/admin/config GET", err, pistaBlob(detalle));
+    return NextResponse.json({ ok: false, mensaje: "No se pudo leer la configuración." }, { status: 500 });
   }
 }
 
@@ -48,8 +48,8 @@ export async function POST(request: NextRequest) {
     await guardarConfigSitio(config);
     return NextResponse.json({ ok: true, config });
   } catch (err) {
-    const mensaje = err instanceof Error ? err.message : "No se pudo guardar la configuración.";
-    logError("api/admin/config POST", err, pistaBlob(mensaje));
-    return NextResponse.json({ ok: false, mensaje }, { status: 500 });
+    const detalle = err instanceof Error ? err.message : String(err);
+    logError("api/admin/config POST", err, pistaBlob(detalle));
+    return NextResponse.json({ ok: false, mensaje: "No se pudo guardar la configuración." }, { status: 500 });
   }
 }
