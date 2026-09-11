@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardarConfigSitio, leerConfigSitio } from "@/lib/blob";
 import type { ConfigSitio } from "@/lib/types";
 import { logError, pistaBlob } from "@/lib/logger";
-import { validarConfigSitio } from "@/lib/validarConfigSitio";
+import { configSitioSchema } from "@/lib/schemas/configSitio";
 
 // Config operativa del sitio (WhatsApp de ventas, datos de contacto del
 // footer) — Propuesta 10. Mismo patrón que /api/admin/guia-tallas: GET
@@ -22,27 +22,19 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => null);
-    if (!body || typeof body !== "object") {
-      return NextResponse.json({ ok: false, mensaje: "Cuerpo de la solicitud inválido." }, { status: 400 });
-    }
-
-    const whatsappVentas = typeof body.whatsappVentas === "string" ? body.whatsappVentas.trim() : "";
-    const descripcionEmpresa = typeof body.descripcionEmpresa === "string" ? body.descripcionEmpresa.trim() : "";
-    const rif = typeof body.rif === "string" ? body.rif.trim() : "";
 
     // Misma validación que el formulario del panel (ConfiguracionForm) —
     // acá es la última línea de defensa: el form ya no debería dejar pasar
     // nada de esto, pero la API no confía únicamente en el cliente.
-    const errores = validarConfigSitio({ whatsappVentas, descripcionEmpresa, rif });
-    const primerError = errores.whatsappVentas ?? errores.descripcionEmpresa ?? errores.rif;
-    if (primerError) {
-      return NextResponse.json({ ok: false, mensaje: primerError }, { status: 400 });
+    const parsed = configSitioSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ ok: false, mensaje: parsed.error.issues[0].message }, { status: 400 });
     }
 
     const config: ConfigSitio = {
-      whatsappVentas: whatsappVentas || null,
-      descripcionEmpresa: descripcionEmpresa || null,
-      rif: rif || null,
+      whatsappVentas: parsed.data.whatsappVentas || null,
+      descripcionEmpresa: parsed.data.descripcionEmpresa || null,
+      rif: parsed.data.rif || null,
     };
 
     await guardarConfigSitio(config);
