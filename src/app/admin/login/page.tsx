@@ -32,7 +32,6 @@ export default async function PaginaLoginAdmin() {
             lo suficiente para que la card flotante y cualquier texto tengan
             contraste garantizado sin importar qué tan clara sea la foto que
             suba el admin. */}
-        <div className="absolute inset-0 bg-gradient-to-br from-ink-900/80 via-ink-900/45 to-ink-900/75" />
       </div>
 
       <Suspense fallback={null}>
