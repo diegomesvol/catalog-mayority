@@ -56,7 +56,7 @@ export function VariantesColorCard({ colores, colorActivo, onSeleccionar, onPrev
               onSeleccionar(color);
             }}
             className={[
-              "h-8 w-8 shrink-0 overflow-hidden rounded-full ring-2 ring-offset-1 ring-offset-paper-raised transition-all duration-150 focus:outline-none focus-visible:ring-accent-600",
+              "h-8 w-8 shrink-0 overflow-hidden rounded-lg ring-2 ring-offset-1 ring-offset-paper-raised transition-all duration-150 focus:outline-none focus-visible:ring-accent-600",
               !conStock ? "opacity-50" : "",
               activo ? "ring-ink-900" : "ring-ink-200 hover:ring-ink-500",
             ].join(" ")}

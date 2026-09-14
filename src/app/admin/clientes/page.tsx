@@ -5,11 +5,10 @@ export const metadata = { title: "Clientes" };
 
 export default function PaginaAdminClientes() {
   return (
-    <>
-      <AdminHeader />
+    <AdminHeader>
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
         <ClientesAdmin />
       </main>
-    </>
+    </AdminHeader>
   );
 }

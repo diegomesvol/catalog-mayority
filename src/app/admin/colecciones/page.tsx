@@ -37,8 +37,7 @@ export default async function PaginaAdminColecciones() {
   };
 
   return (
-    <>
-      <AdminHeader />
+    <AdminHeader>
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
         {productos.length === 0 ? (
           <p className="rounded-xl border border-ink-200 bg-paper-raised p-4 text-sm text-ink-500">
@@ -57,6 +56,6 @@ export default async function PaginaAdminColecciones() {
           </Link>
         </p>
       </main>
-    </>
+    </AdminHeader>
   );
 }

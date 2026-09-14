@@ -6,13 +6,15 @@ import { usePathname } from "next/navigation";
 import { NAV_ADMIN, esItemActivo, itemsVisibles } from "@/lib/adminNav";
 import type { RolAdmin } from "@/lib/auth";
 import { useBloqueoScroll } from "@/hooks/useBloqueoScroll";
+import { IconoSeccionAdmin } from "./IconoSeccionAdmin";
 
 // Botón de hamburguesa + drawer de navegación para mobile/tablet (por debajo
-// de "lg") — AdminNav.tsx sigue siendo la navegación de "lg" en adelante,
-// ambos leen NAV_ADMIN para no duplicar la lista de secciones. Mismo patrón
-// visual que CarritoDrawer.tsx (overlay + panel que desliza), pero acá el
-// panel entra desde la IZQUIERDA para no confundirse con el carrito (que
-// entra desde la derecha) — dos paneles con el mismo gesto pero direcciones
+// de "lg") — AdminNav.tsx es el sidebar colapsable de "lg" en adelante,
+// ambos leen NAV_ADMIN (y sus mismos íconos, IconoSeccionAdmin) para no
+// duplicar ni la lista de secciones ni el set de SVGs. Mismo patrón visual
+// que CarritoDrawer.tsx (overlay + panel que desliza), pero acá el panel
+// entra desde la IZQUIERDA para no confundirse con el carrito (que entra
+// desde la derecha) — dos paneles con el mismo gesto pero direcciones
 // opuestas ayudan a distinguir "esto es navegación" de "esto es tu pedido".
 export function MenuMovilAdmin({ rol }: { rol: RolAdmin | null }) {
   const pathname = usePathname();
@@ -115,10 +117,11 @@ export function MenuMovilAdmin({ rol }: { rol: RolAdmin | null }) {
                 href={item.href}
                 aria-current={activo ? "page" : undefined}
                 onClick={() => setAbierto(false)}
-                className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                   activo ? "bg-ink-900 text-white" : "text-ink-700 hover:bg-ink-100"
                 }`}
               >
+                <IconoSeccionAdmin id={item.icono} className="shrink-0" />
                 {item.etiqueta}
               </Link>
             );
