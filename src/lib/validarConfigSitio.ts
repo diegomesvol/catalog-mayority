@@ -6,19 +6,22 @@
 export const WHATSAPP_VENTAS_MAX = 20; // dígitos + separadores que el admin haya tipeado, con margen
 export const DESCRIPCION_EMPRESA_MAX = 300;
 export const RIF_MAX = 20;
+export const FONDO_LOGIN_URL_MAX = 2000; // margen generoso: puede ser una URL externa larga
 
 export interface ErroresConfigSitio {
   whatsappVentas?: string;
   descripcionEmpresa?: string;
   rif?: string;
+  fondoLoginUrl?: string;
 }
 
-// Los 3 campos ya recortados (trim) — vacío = "no configurado", no dispara
+// Los 4 campos ya recortados (trim) — vacío = "no configurado", no dispara
 // validación de formato, solo de longitud (que ni recortado puede superar).
 export interface CamposConfigSitio {
   whatsappVentas: string;
   descripcionEmpresa: string;
   rif: string;
+  fondoLoginUrl: string;
 }
 
 export function validarConfigSitio(campos: CamposConfigSitio): ErroresConfigSitio {
@@ -38,5 +41,26 @@ export function validarConfigSitio(campos: CamposConfigSitio): ErroresConfigSiti
     errores.rif = `Máximo ${RIF_MAX} caracteres.`;
   }
 
+  // La subida por archivo ya llega convertida en una URL propia
+  // ("/api/imagenes/login/…") — esta validación es sobre todo para cuando
+  // el admin pega una URL externa a mano: que al menos tenga forma de URL,
+  // para no guardar un valor que después rompe silenciosamente el fondo del
+  // login.
+  if (campos.fondoLoginUrl.length > FONDO_LOGIN_URL_MAX) {
+    errores.fondoLoginUrl = `Máximo ${FONDO_LOGIN_URL_MAX} caracteres.`;
+  } else if (campos.fondoLoginUrl && !esUrlOInterna(campos.fondoLoginUrl)) {
+    errores.fondoLoginUrl = "Tiene que ser una URL válida (o subir un archivo).";
+  }
+
   return errores;
+}
+
+function esUrlOInterna(valor: string): boolean {
+  if (valor.startsWith("/")) return true; // "/api/imagenes/login/…" (subida por archivo)
+  try {
+    const url = new URL(valor);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }

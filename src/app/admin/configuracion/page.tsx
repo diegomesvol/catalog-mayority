@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { ConfiguracionForm } from "@/components/admin/ConfiguracionForm";
 import { GuiaTallasConfig } from "@/components/admin/GuiaTallasConfig";
+import { PerfilSeguridadAdmin } from "@/components/admin/PerfilSeguridadAdmin";
 
 export const metadata = { title: "Configuración · Panel de administración" };
 // Mismo motivo que las otras dos pestañas del panel: sin esto, Next intenta
@@ -17,6 +18,7 @@ export default function PaginaAdminConfiguracion() {
     <AdminHeader>
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
         <ConfiguracionForm />
+        <PerfilSeguridadAdmin />
         <GuiaTallasConfig />
         <p className="mt-6 text-center text-xs text-ink-500">
           <Link href="/" className="underline-offset-2 hover:underline">

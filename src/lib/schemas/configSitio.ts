@@ -17,6 +17,7 @@ export const configSitioSchema = z
     whatsappVentas: campoTexto,
     descripcionEmpresa: campoTexto,
     rif: campoTexto,
+    fondoLoginUrl: campoTexto,
   })
   .superRefine((campos: CamposConfigSitio, ctx) => {
     const errores = validarConfigSitio(campos);

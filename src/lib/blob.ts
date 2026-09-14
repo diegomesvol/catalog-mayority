@@ -362,6 +362,20 @@ export async function subirImagenColeccion(nombre: string, bytes: ArrayBuffer, c
   return `/api/imagenes/${resultado.pathname}`;
 }
 
+/** Mismo patrón que subirImagenColeccion — el fondo de /admin/login sube acá
+ * cuando el admin elige "archivo" en vez de pegar una URL externa (ver
+ * ConfiguracionForm). El prefijo "login/" también hay que sumarlo a
+ * PREFIJOS_PERMITIDOS en api/imagenes/[...pathname]/route.ts, si no
+ * /api/imagenes lo rechaza con 404 aunque el Blob exista. */
+export async function subirImagenFondoLogin(nombre: string, bytes: ArrayBuffer, contentType: string): Promise<string> {
+  const resultado = await put(`login/${nombre}`, bytes, {
+    access: "private",
+    addRandomSuffix: true,
+    contentType,
+  });
+  return `/api/imagenes/${resultado.pathname}`;
+}
+
 // --- Historial de cargas -----------------------------------------------
 // Un archivo JSON por carga confirmada, bajo el prefijo "historial/" — no
 // una sola lista que se reescribe entera en cada carga (eso arriesgaría
@@ -431,7 +445,7 @@ export async function leerHistorial(limite = 20): Promise<EntradaHistorial[]> {
 // los usa cae a su valor por defecto (ver CONFIG_VACIA).
 const CONFIG_SITIO_KEY = "config-sitio.json";
 
-export const CONFIG_SITIO_VACIA: ConfigSitio = { whatsappVentas: null, descripcionEmpresa: null, rif: null };
+export const CONFIG_SITIO_VACIA: ConfigSitio = { whatsappVentas: null, descripcionEmpresa: null, rif: null, fondoLoginUrl: null };
 
 // cache() — layout.tsx, page.tsx y producto/[id]/page.tsx llaman esto cada
 // uno por su cuenta dentro de la misma request (config del footer). Sin

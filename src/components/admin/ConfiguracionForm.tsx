@@ -4,16 +4,19 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { logError } from "@/lib/logger";
 import { fetchJson } from "@/lib/apiCliente";
+import { ImagenProducto } from "@/components/catalogo/ImagenProducto";
 import type { ConfigSitio } from "@/lib/types";
 import {
   DESCRIPCION_EMPRESA_MAX,
+  FONDO_LOGIN_URL_MAX,
   RIF_MAX,
   WHATSAPP_VENTAS_MAX,
   validarConfigSitio,
   type ErroresConfigSitio,
 } from "@/lib/validarConfigSitio";
 
-const VACIA: ConfigSitio = { whatsappVentas: null, descripcionEmpresa: null, rif: null };
+const VACIA: ConfigSitio = { whatsappVentas: null, descripcionEmpresa: null, rif: null, fondoLoginUrl: null };
+const TIPOS_IMAGEN_FONDO = "image/png,image/jpeg,image/webp";
 
 // Datos operativos que antes solo se podían cambiar desde Vercel (variable
 // de entorno) o estaban fijos en el código (Footer.tsx) — Propuesta 10.
@@ -31,6 +34,7 @@ export function ConfiguracionForm() {
   const [errores, setErrores] = useState<ErroresConfigSitio>({});
   const [cargandoInicial, setCargandoInicial] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  const [subiendoFondo, setSubiendoFondo] = useState(false);
 
   useEffect(() => {
     let cancelado = false;
@@ -72,11 +76,39 @@ export function ConfiguracionForm() {
     if (errores[clave as keyof ErroresConfigSitio]) setErrores({ ...errores, [clave]: undefined });
   }
 
+  // La imagen se sube ENSEGUIDA (no tiene sentido "borrador" para un
+  // archivo) — lo que queda pendiente de "Guardar cambios" es solo la URL
+  // resultante, igual que si el admin la hubiera pegado a mano en el campo
+  // de texto. Mismo patrón que subirImagen en useColeccionesAdmin.
+  async function subirFondo(archivo: File) {
+    setSubiendoFondo(true);
+    try {
+      const formData = new FormData();
+      formData.append("archivo", archivo);
+      const { resp, data } = await fetchJson<{ ok: boolean; url?: string; mensaje?: string }>("/api/admin/config/fondo-login", {
+        method: "POST",
+        body: formData,
+      });
+      if (!resp.ok || !data || !data.ok || !data.url) {
+        toast.error(data?.mensaje ?? "No se pudo subir la imagen.");
+        return;
+      }
+      campo("fondoLoginUrl", data.url);
+      toast.success("Imagen subida — no te olvides de \"Guardar cambios\".");
+    } catch (err) {
+      logError("ConfiguracionForm.subirFondo", err, "No se pudo conectar con el servidor para subir la imagen.");
+      toast.error("No se pudo conectar con el servidor.");
+    } finally {
+      setSubiendoFondo(false);
+    }
+  }
+
   async function guardar() {
     const campos = {
       whatsappVentas: (borrador.whatsappVentas ?? "").trim(),
       descripcionEmpresa: (borrador.descripcionEmpresa ?? "").trim(),
       rif: (borrador.rif ?? "").trim(),
+      fondoLoginUrl: (borrador.fondoLoginUrl ?? "").trim(),
     };
 
     const erroresActuales = validarConfigSitio(campos);
@@ -151,6 +183,16 @@ export function ConfiguracionForm() {
           <FilaLectura etiqueta="WhatsApp de ventas" valor={guardado.whatsappVentas} placeholder="Sin configurar — usa el número de Vercel" />
           <FilaLectura etiqueta="Descripción de la empresa" valor={guardado.descripcionEmpresa} placeholder="Sin configurar — usa el texto por defecto" />
           <FilaLectura etiqueta="RIF" valor={guardado.rif} placeholder="Sin configurar — usa el RIF por defecto" />
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs font-medium text-ink-500">Fondo del login</span>
+            {guardado.fondoLoginUrl ? (
+              <div className="mt-1 h-24 w-full max-w-xs overflow-hidden rounded-lg border border-ink-200">
+                <ImagenProducto src={guardado.fondoLoginUrl} alt="Fondo del login" className="h-full w-full" sizes="320px" />
+              </div>
+            ) : (
+              <span className="text-sm italic text-ink-500">Sin configurar — usa el degradé por defecto</span>
+            )}
+          </div>
         </div>
       ) : (
         <div className="mt-4 flex flex-col gap-4">
@@ -182,6 +224,57 @@ export function ConfiguracionForm() {
             maxLength={RIF_MAX}
             error={errores.rif}
           />
+
+          <div>
+            <EncabezadoCampo
+              id="config-fondoLoginUrl"
+              etiqueta="Fondo del login"
+              valor={borrador.fondoLoginUrl ?? ""}
+              maxLength={FONDO_LOGIN_URL_MAX}
+            />
+            <div className="flex items-start gap-3">
+              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-ink-200">
+                <ImagenProducto src={borrador.fondoLoginUrl ?? undefined} alt="" className="h-full w-full" sizes="64px" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <input
+                  id="config-fondoLoginUrl"
+                  type="url"
+                  placeholder="https://…"
+                  value={borrador.fondoLoginUrl ?? ""}
+                  onChange={(e) => campo("fondoLoginUrl", e.target.value)}
+                  maxLength={FONDO_LOGIN_URL_MAX}
+                  aria-invalid={Boolean(errores.fondoLoginUrl)}
+                  aria-describedby={errores.fondoLoginUrl ? "config-fondoLoginUrl-error" : "config-fondoLoginUrl-ayuda"}
+                  className={`w-full rounded-lg border bg-paper px-3 py-2 text-sm text-ink-900 focus:border-accent-600 ${
+                    errores.fondoLoginUrl ? "border-danger-600" : "border-ink-200"
+                  }`}
+                />
+                <input
+                  type="file"
+                  accept={TIPOS_IMAGEN_FONDO}
+                  disabled={subiendoFondo}
+                  onChange={(e) => {
+                    const archivo = e.target.files?.[0];
+                    if (archivo) subirFondo(archivo);
+                    e.target.value = "";
+                  }}
+                  className="mt-2 block w-full text-xs text-ink-700 file:mr-2 file:rounded-full file:border-0 file:bg-ink-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink-900 hover:file:bg-ink-200"
+                />
+              </div>
+            </div>
+            {errores.fondoLoginUrl ? (
+              <p id="config-fondoLoginUrl-error" className="mt-1 text-xs text-danger-600">
+                {errores.fondoLoginUrl}
+              </p>
+            ) : (
+              <p id="config-fondoLoginUrl-ayuda" className="mt-1 text-[11px] text-ink-500">
+                {subiendoFondo
+                  ? "Subiendo…"
+                  : "Pegá una URL o subí un archivo (PNG, JPG o WEBP). Se ve mejor en 1920×1080px o relación 16:9 — otra proporción se recorta al centro. Vacío = se usa el degradé por defecto."}
+              </p>
+            )}
+          </div>
         </div>
       )}
 

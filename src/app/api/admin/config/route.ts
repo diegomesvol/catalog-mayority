@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
       whatsappVentas: parsed.data.whatsappVentas || null,
       descripcionEmpresa: parsed.data.descripcionEmpresa || null,
       rif: parsed.data.rif || null,
+      fondoLoginUrl: parsed.data.fondoLoginUrl || null,
     };
 
     await guardarConfigSitio(config);

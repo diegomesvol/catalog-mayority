@@ -162,4 +162,8 @@ export interface ConfigSitio {
   whatsappVentas: string | null; // solo dígitos, formato internacional (ej. "584121234567")
   descripcionEmpresa: string | null;
   rif: string | null;
+  // Fondo de pantalla completo de /admin/login — subido como archivo (queda
+  // como "/api/imagenes/login/…", ver subirImagenFondoLogin en blob.ts) o
+  // pegado directo como URL externa. null = usa el degradé por defecto.
+  fondoLoginUrl: string | null;
 }
