@@ -331,7 +331,10 @@ function idsUnicos() {
   };
 }
 
-function slugify(texto: string): string {
+// export: lib/blob.ts la reusa para reconstruir el mismo id de curva
+// ("slugify(serie) || 'unico'") al leer el catálogo desde Supabase — mismo
+// criterio acá y ahí, sin duplicar la función.
+export function slugify(texto: string): string {
   return texto
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "") // quita diacríticos (tildes) tras normalizar
