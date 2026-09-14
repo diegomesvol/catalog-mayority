@@ -7,6 +7,8 @@ import { BusquedaProvider } from "@/components/catalogo/BusquedaContext";
 import { ModoOffline } from "@/components/ui/ModoOffline";
 import { leerConfigSitio } from "@/lib/blob";
 import { sanearNumeroWhatsApp } from "@/lib/carrito";
+import { crearClienteServidor } from "@/lib/supabase";
+import { obtenerClienteActivo } from "@/lib/clienteAuth";
 import "./globals.css";
 
 // Fuente del sistema en vez de next/font/google: carga instantánea, cero
@@ -51,7 +53,16 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   // request, y se pasa a CarritoProvider. Si el admin no configuró ninguno
   // todavía, CarritoProvider cae solo al de la variable de entorno (ver
   // numeroWhatsAppVentas en lib/carrito.ts).
-  const config = await leerConfigSitio();
+  //
+  // Mismo criterio para saber si hay un cliente logueado: se resuelve acá
+  // (una vez por request) y se pasa como booleano a CarritoProvider — lo
+  // único que necesita usePedidoWhatsApp para decidir si, además de abrir
+  // WhatsApp, intenta guardar el pedido en /api/cliente/pedidos (ver la nota
+  // grande ahí). No se expone el perfil completo, solo si existe.
+  const [config, clienteActivo] = await Promise.all([
+    leerConfigSitio(),
+    crearClienteServidor().then((supabase) => obtenerClienteActivo(supabase)),
+  ]);
   const numeroWhatsApp = sanearNumeroWhatsApp(config.whatsappVentas);
 
   return (
@@ -66,7 +77,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             useSearchParams no rompa el build. */}
         <Suspense fallback={null}>
           <BusquedaProvider>
-            <CarritoProvider numeroWhatsApp={numeroWhatsApp}>
+            <CarritoProvider numeroWhatsApp={numeroWhatsApp} clienteLogueado={Boolean(clienteActivo)}>
               {children}
               <CarritoDrawer />
             </CarritoProvider>

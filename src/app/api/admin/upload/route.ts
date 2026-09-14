@@ -11,6 +11,8 @@ import { transformarFilas, validarColumnas } from "@/lib/transform";
 import { compararCatalogos } from "@/lib/diffCatalogo";
 import type { ResumenImportacion } from "@/lib/types";
 import { logError, pistaBlob } from "@/lib/logger";
+import { crearClienteServidor } from "@/lib/supabase";
+import { requierePermisoEscritura } from "@/lib/auth";
 
 // El archivo llega directo en el body del pedido (multipart/form-data) — pasa
 // por esta función serverless, así que está sujeto al límite de tamaño de
@@ -22,6 +24,10 @@ import { logError, pistaBlob } from "@/lib/logger";
 // entra sin problema en 4.5 MB.
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await crearClienteServidor();
+    const permiso = await requierePermisoEscritura(supabase, "catalogo");
+    if (!permiso.ok) return permiso.respuesta;
+
     const formData = await request.formData();
     const tipo = String(formData.get("tipo") ?? "");
 

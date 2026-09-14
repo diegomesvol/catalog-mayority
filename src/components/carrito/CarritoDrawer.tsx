@@ -21,7 +21,7 @@ function confirmarVaciar(alConfirmar: () => void) {
 }
 
 export function CarritoDrawer() {
-  const { items, comprador, abierto, numeroWhatsApp, actualizarCantidad, quitarItem, vaciar, setComprador, cerrar } = useCarrito();
+  const { items, comprador, abierto, numeroWhatsApp, clienteLogueado, actualizarCantidad, quitarItem, vaciar, setComprador, cerrar } = useCarrito();
   const numeroConfigurado = numeroWhatsApp;
   const { errores, campo, enviarPorWhatsApp } = usePedidoWhatsApp({
     abierto,
@@ -29,6 +29,7 @@ export function CarritoDrawer() {
     items,
     comprador,
     numeroWhatsApp,
+    clienteLogueado,
     setComprador,
   });
 

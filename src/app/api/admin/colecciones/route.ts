@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardarColecciones, leerColecciones } from "@/lib/blob";
 import { coleccionesSchema, limpiarColecciones } from "@/lib/schemas/colecciones";
 import { logError, pistaBlob } from "@/lib/logger";
+import { crearClienteServidor } from "@/lib/supabase";
+import { requierePermisoEscritura } from "@/lib/auth";
 
 // Mismo patrón que /api/admin/config: GET devuelve la lista guardada (o
 // vacía si el admin todavía no configuró ninguna), POST reemplaza la lista
@@ -21,6 +23,10 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await crearClienteServidor();
+    const permiso = await requierePermisoEscritura(supabase, "operativo");
+    if (!permiso.ok) return permiso.respuesta;
+
     const body = await request.json().catch(() => null);
     const parsed = coleccionesSchema.safeParse(body);
     if (!parsed.success) {

@@ -1,20 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { crearClienteProxy } from "@/lib/supabase";
 import { obtenerAdminActivo } from "@/lib/auth";
+import { obtenerClienteActivo } from "@/lib/clienteAuth";
 
-// Protege todo /admin/* y /api/admin/* excepto login e invitación. (Next.js
-// 16 renombró "middleware" a "proxy"; misma función, nuevo nombre de
-// archivo.) Runtime Edge — por eso crearClienteProxy (no crearClienteServidor,
-// que depende de next/headers).
+// Protege /admin/* + /api/admin/* Y /cliente/* + /api/cliente/* (dos árboles
+// de sesión independientes — un login de cliente no sirve para /admin y
+// viceversa). (Next.js 16 renombró "middleware" a "proxy"; misma función,
+// nuevo nombre de archivo.) Runtime Edge — por eso crearClienteProxy (no
+// crearClienteServidor, que depende de next/headers).
 //
-// /admin/invitacion tiene que ser pública: el token de invitación/recovery de
-// Supabase llega en el FRAGMENTO de la URL (#access_token=...), que el
-// navegador nunca envía al servidor — así que en la primera carga de esa
-// página el proxy no tiene forma de ver ese token, todavía no hay sesión, y
-// sin este permiso redirigiría a /admin/login antes de que el cliente llegue
-// a procesarlo. La página en sí ya valida el token del lado del cliente y no
-// muestra nada útil sin uno válido — dejarla pública no abre ningún hueco.
-const RUTAS_PUBLICAS = ["/admin/login", "/api/admin/login", "/admin/invitacion"];
+// /admin/invitacion y /cliente/invitacion tienen que ser públicas: el token
+// de invitación/recovery de Supabase llega en el FRAGMENTO de la URL
+// (#access_token=...), que el navegador nunca envía al servidor — así que en
+// la primera carga de esas páginas el proxy no tiene forma de ver ese token,
+// todavía no hay sesión, y sin este permiso redirigiría al login antes de que
+// el cliente llegue a procesarlo. Las páginas en sí ya validan el token del
+// lado del navegador y no muestran nada útil sin uno válido — dejarlas
+// públicas no abre ningún hueco.
+const RUTAS_PUBLICAS = [
+  "/admin/login",
+  "/api/admin/login",
+  "/admin/invitacion",
+  "/cliente/login",
+  "/api/cliente/login",
+  "/cliente/invitacion",
+];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -23,20 +33,22 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // La response se crea ANTES de leer el admin y se devuelve al final: es
+  const esArbolCliente = pathname.startsWith("/cliente") || pathname.startsWith("/api/cliente");
+
+  // La response se crea ANTES de leer el perfil y se devuelve al final: es
   // donde crearClienteProxy escribe el refresco de cookies de sesión de
   // Supabase — devolver una response distinta perdería ese refresco y
-  // desloguearía al admin en cuanto el access token expire.
+  // desloguearía a la sesión en cuanto el access token expire.
   const response = NextResponse.next();
   const supabase = crearClienteProxy(request, response);
-  const admin = await obtenerAdminActivo(supabase);
+  const perfil = esArbolCliente ? await obtenerClienteActivo(supabase) : await obtenerAdminActivo(supabase);
 
-  if (!admin) {
-    if (pathname.startsWith("/api/admin")) {
+  if (!perfil) {
+    if (pathname.startsWith("/api/")) {
       return NextResponse.json({ ok: false, mensaje: "No autenticado" }, { status: 401 });
     }
     const url = request.nextUrl.clone();
-    url.pathname = "/admin/login";
+    url.pathname = esArbolCliente ? "/cliente/login" : "/admin/login";
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
@@ -45,5 +57,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/admin/:path*"],
+  matcher: ["/admin/:path*", "/api/admin/:path*", "/cliente/:path*", "/api/cliente/:path*"],
 };

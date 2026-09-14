@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardarGuiaTallas, leerGuiaTallas, subirImagenGuiaTallas } from "@/lib/blob";
 import type { GuiaTallas } from "@/lib/types";
 import { logError, pistaBlob } from "@/lib/logger";
+import { crearClienteServidor } from "@/lib/supabase";
+import { requierePermisoEscritura } from "@/lib/auth";
 
 // Guía de tallas: config aparte del catálogo (no cambia con cada carga de
 // Excel — ver la nota en lib/blob.ts). El admin sube una imagen o pega un
@@ -26,6 +28,10 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await crearClienteServidor();
+    const permiso = await requierePermisoEscritura(supabase, "operativo");
+    if (!permiso.ok) return permiso.respuesta;
+
     const formData = await request.formData();
     const actual = await leerGuiaTallas();
     const nueva: GuiaTallas = { ...actual };

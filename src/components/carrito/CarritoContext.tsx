@@ -25,6 +25,11 @@ interface CarritoContextValor {
   // entorno NEXT_PUBLIC_WHATSAPP_VENTAS. null si ninguno de los dos está
   // disponible — ver CarritoDrawer, que deshabilita el envío en ese caso.
   numeroWhatsApp: string | null;
+  // Resuelto en el servidor (RootLayout, vía obtenerClienteActivo) y pasado
+  // como prop, mismo motivo que numeroWhatsApp — lo único que necesita
+  // usePedidoWhatsApp para decidir si además de abrir WhatsApp intenta
+  // guardar el pedido en /api/cliente/pedidos.
+  clienteLogueado: boolean;
   agregarItem: (item: Omit<ItemCarrito, "cantidad">, cantidad: number, opciones?: OpcionesAgregarItem) => void;
   actualizarCantidad: (itemId: string, cantidad: number) => void;
   quitarItem: (itemId: string) => void;
@@ -53,9 +58,12 @@ interface Props {
   // ConfigSitio vive en Vercel Blob, del lado del servidor. null cuando el
   // admin no configuró ninguno todavía (cae al de la variable de entorno).
   numeroWhatsApp: string | null;
+  // Resuelto en el servidor (RootLayout, vía obtenerClienteActivo) — ver la
+  // nota en CarritoContextValor.
+  clienteLogueado: boolean;
 }
 
-export function CarritoProvider({ children, numeroWhatsApp: numeroConfigurado }: Props) {
+export function CarritoProvider({ children, numeroWhatsApp: numeroConfigurado, clienteLogueado }: Props) {
   // Arranca vacío en el server y en el primer render del cliente (evita
   // desajustes de hidratación); el contenido real de localStorage se carga
   // recién en el useEffect, que solo corre en el navegador.
@@ -142,6 +150,7 @@ export function CarritoProvider({ children, numeroWhatsApp: numeroConfigurado }:
       comprador,
       abierto,
       numeroWhatsApp,
+      clienteLogueado,
       agregarItem,
       actualizarCantidad,
       quitarItem,
@@ -150,7 +159,7 @@ export function CarritoProvider({ children, numeroWhatsApp: numeroConfigurado }:
       abrir,
       cerrar,
     }),
-    [items, comprador, abierto, numeroWhatsApp, agregarItem, actualizarCantidad, quitarItem, vaciar, abrir, cerrar],
+    [items, comprador, abierto, numeroWhatsApp, clienteLogueado, agregarItem, actualizarCantidad, quitarItem, vaciar, abrir, cerrar],
   );
 
   return <CarritoContext.Provider value={valor}>{children}</CarritoContext.Provider>;

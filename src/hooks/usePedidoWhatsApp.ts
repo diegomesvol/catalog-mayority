@@ -2,10 +2,35 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { linkWhatsAppPedido, type DatosComprador, type ItemCarrito } from "@/lib/carrito";
+import { linkWhatsAppPedido, totalCarrito, type DatosComprador, type ItemCarrito } from "@/lib/carrito";
 import { logError } from "@/lib/logger";
 
 export type ErroresComprador = Partial<Record<keyof DatosComprador, string>>;
+
+// Guarda el pedido en /api/cliente/pedidos, SUMADO al envío por WhatsApp de
+// siempre (no lo reemplaza — ver la nota grande más abajo, en
+// enviarPorWhatsApp). Deliberadamente sin await desde el llamador: un fallo
+// acá nunca debe impedir ni demorar el envío por WhatsApp, que es el flujo
+// principal y el único que existía hasta ahora.
+async function persistirPedido(items: ItemCarrito[], comprador: DatosComprador, total: number) {
+  try {
+    const resp = await fetch("/api/cliente/pedidos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items, comprador, total }),
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => null);
+      logError("usePedidoWhatsApp.persistirPedido", (data?.mensaje as string | undefined) ?? `HTTP ${resp.status}`);
+    }
+  } catch (err) {
+    logError(
+      "usePedidoWhatsApp.persistirPedido",
+      err,
+      "No se pudo guardar el pedido en la cuenta del cliente — el envío por WhatsApp igual se realizó, así que no se le muestra ningún error.",
+    );
+  }
+}
 
 function validarComprador(c: DatosComprador): ErroresComprador {
   const errores: ErroresComprador = {};
@@ -22,6 +47,9 @@ interface Options {
   items: ItemCarrito[];
   comprador: DatosComprador;
   numeroWhatsApp: string | null;
+  // Si hay un cliente logueado (ver CarritoContext/RootLayout), el pedido
+  // también se guarda en /api/cliente/pedidos — ver enviarPorWhatsApp.
+  clienteLogueado: boolean;
   setComprador: (comprador: DatosComprador) => void;
 }
 
@@ -29,7 +57,7 @@ interface Options {
  * Toda la lógica de "tus datos" + envío por WhatsApp del panel del carrito —
  * CarritoDrawer.tsx solo consume esto y renderiza el formulario y el botón.
  */
-export function usePedidoWhatsApp({ abierto, cerrar, items, comprador, numeroWhatsApp, setComprador }: Options) {
+export function usePedidoWhatsApp({ abierto, cerrar, items, comprador, numeroWhatsApp, clienteLogueado, setComprador }: Options) {
   const [errores, setErrores] = useState<ErroresComprador>({});
 
   // Cierra con Escape — patrón esperado de cualquier panel/diálogo lateral.
@@ -76,6 +104,14 @@ export function usePedidoWhatsApp({ abierto, cerrar, items, comprador, numeroWha
     if (!link) {
       toast.error("El envío por WhatsApp todavía no está configurado. Avisale al administrador del sitio.");
       return;
+    }
+    // Se SUMA al envío por WhatsApp, no lo reemplaza (requisito explícito):
+    // sin await a propósito — si esto falla, el envío por WhatsApp de abajo
+    // tiene que pasar igual, sin demora y sin mostrarle ningún error al
+    // comprador (ver persistirPedido). Solo se intenta si hay una cuenta de
+    // cliente logueada; para un comprador anónimo no hay dónde guardarlo.
+    if (clienteLogueado) {
+      void persistirPedido(items, comprador, totalCarrito(items));
     }
     window.open(link, "_blank", "noopener,noreferrer");
   }

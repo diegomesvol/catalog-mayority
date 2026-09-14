@@ -2,10 +2,14 @@ import { NextResponse } from "next/server";
 import { confirmarReemplazoCatalogo } from "@/lib/blob";
 import { crearClienteServidor } from "@/lib/supabase";
 import { adquirirLockCatalogo, liberarLockCatalogo } from "@/lib/catalogoLock";
+import { requierePermisoEscritura } from "@/lib/auth";
 import { logError, pistaBlob } from "@/lib/logger";
 
 export async function POST() {
   const supabase = await crearClienteServidor();
+  const permiso = await requierePermisoEscritura(supabase, "catalogo");
+  if (!permiso.ok) return permiso.respuesta;
+
   const token = await adquirirLockCatalogo(supabase, "confirmar");
   if (!token) {
     return NextResponse.json(
