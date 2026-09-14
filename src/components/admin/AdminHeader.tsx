@@ -8,6 +8,7 @@ import { fetchJson } from "@/lib/apiCliente";
 import type { PerfilAdmin } from "@/lib/auth";
 import { AdminNav } from "./AdminNav";
 import { AvisoModoDemo } from "./AvisoModoDemo";
+import { MenuMovilAdmin } from "./MenuMovilAdmin";
 
 export function AdminHeader() {
   const router = useRouter();
@@ -39,10 +40,14 @@ export function AdminHeader() {
   return (
     <header className="border-b border-ink-200 bg-paper-raised">
       <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3.5 sm:px-6">
-        <div className="flex items-center gap-2">
-          <span className="text-base font-semibold tracking-tight text-ink-900">Panel de administración</span>
+        <div className="flex min-w-0 items-center gap-2">
+          <MenuMovilAdmin rol={perfil?.rol ?? null} />
+          <span className="truncate text-base font-semibold tracking-tight text-ink-900">
+            <span className="lg:hidden">Panel</span>
+            <span className="hidden lg:inline">Panel de administración</span>
+          </span>
           {perfil?.solo_lectura && (
-            <span className="rounded-full border border-warning-600/30 bg-warning-100 px-2.5 py-0.5 text-xs font-medium text-warning-600">
+            <span className="shrink-0 rounded-full border border-warning-600/30 bg-warning-100 px-2.5 py-0.5 text-xs font-medium text-warning-600">
               Modo demostración
             </span>
           )}
@@ -56,7 +61,7 @@ export function AdminHeader() {
           Cerrar sesión
         </button>
       </div>
-      <AdminNav />
+      <AdminNav rol={perfil?.rol ?? null} />
       <AvisoModoDemo />
     </header>
   );

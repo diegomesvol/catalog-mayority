@@ -2,39 +2,31 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { NAV_ADMIN, esItemActivo, itemsVisibles } from "@/lib/adminNav";
+import type { RolAdmin } from "@/lib/auth";
 
-const TABS = [
-  { href: "/admin", etiqueta: "Dashboard" },
-  { href: "/admin/catalogo", etiqueta: "Catálogo" },
-  { href: "/admin/colecciones", etiqueta: "Colecciones" },
-  { href: "/admin/clientes", etiqueta: "Clientes" },
-  { href: "/admin/pedidos", etiqueta: "Pedidos" },
-  { href: "/admin/configuracion", etiqueta: "Configuración" },
-];
-
-// Navegación del panel — separada en secciones a medida que el panel fue
-// ganando funcionalidades (antes todo vivía en una sola pantalla). Cada
-// pestaña agrupa lo que tiene algo en común: ver el estado del catálogo
-// (Dashboard), cargarlo/revertirlo/ver su historial (Catálogo), las
-// tarjetas de la home (Colecciones), y datos operativos que casi no
-// cambian (Configuración).
-export function AdminNav() {
+// Navegación de escritorio — tabs horizontales, solo desde "lg" en adelante.
+// Por debajo de "lg" (mobile y tablet) la navegación es MenuMovilAdmin (el
+// drawer de hamburguesa) — mismo NAV_ADMIN, ver la nota ahí para por qué está
+// compartido en vez de duplicado.
+export function AdminNav({ rol }: { rol: RolAdmin | null }) {
   const pathname = usePathname();
+  const items = itemsVisibles(NAV_ADMIN, rol);
 
   return (
-    <nav className="mx-auto flex max-w-3xl gap-1 overflow-x-auto px-4 sm:px-6" aria-label="Secciones del panel">
-      {TABS.map((tab) => {
-        const activo = tab.href === "/admin" ? pathname === "/admin" : pathname.startsWith(tab.href);
+    <nav className="mx-auto hidden max-w-3xl gap-1 px-4 sm:px-6 lg:flex" aria-label="Secciones del panel">
+      {items.map((item) => {
+        const activo = esItemActivo(item, pathname);
         return (
           <Link
-            key={tab.href}
-            href={tab.href}
+            key={item.href}
+            href={item.href}
             aria-current={activo ? "page" : undefined}
             className={`shrink-0 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
               activo ? "border-ink-900 text-ink-900" : "border-transparent text-ink-500 hover:text-ink-900"
             }`}
           >
-            {tab.etiqueta}
+            {item.etiqueta}
           </Link>
         );
       })}
