@@ -1,11 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { linkWhatsAppPedido, totalCarrito, type DatosComprador, type ItemCarrito } from "@/lib/carrito";
 import { logError } from "@/lib/logger";
 
 export type ErroresComprador = Partial<Record<keyof DatosComprador, string>>;
+
+interface RespuestaPedido {
+  ok: boolean;
+  pedido?: { id: string };
+  mensaje?: string;
+}
 
 // Guarda el pedido en /api/cliente/pedidos, SUMADO al envío por WhatsApp de
 // siempre (no lo reemplaza — ver la nota grande más abajo, en
@@ -50,15 +57,26 @@ interface Options {
   // Si hay un cliente logueado (ver CarritoContext/RootLayout), el pedido
   // también se guarda en /api/cliente/pedidos — ver enviarPorWhatsApp.
   clienteLogueado: boolean;
+  // clientes.perfil_completo — condición para "Realizar pedido" (ver
+  // realizarPedido). No afecta a enviarPorWhatsApp, que no cambió.
+  perfilCompleto: boolean;
   setComprador: (comprador: DatosComprador) => void;
+  vaciar: () => void;
 }
 
 /**
- * Toda la lógica de "tus datos" + envío por WhatsApp del panel del carrito —
- * CarritoDrawer.tsx solo consume esto y renderiza el formulario y el botón.
+ * Toda la lógica de "tus datos" + envío por WhatsApp + "Realizar pedido" del
+ * panel del carrito — CarritoDrawer.tsx solo consume esto y renderiza el
+ * formulario y los botones.
  */
-export function usePedidoWhatsApp({ abierto, cerrar, items, comprador, numeroWhatsApp, clienteLogueado, setComprador }: Options) {
+export function usePedidoWhatsApp({ abierto, cerrar, items, comprador, numeroWhatsApp, clienteLogueado, perfilCompleto, setComprador, vaciar }: Options) {
+  const router = useRouter();
   const [errores, setErrores] = useState<ErroresComprador>({});
+  // Dispara la animación de "shake" en el botón "Realizar pedido" cuando el
+  // perfil está incompleto — se apaga sola después de la animación (ver
+  // CarritoDrawer, que le pone la clase animate-shake mientras esto es true).
+  const [temblando, setTemblando] = useState(false);
+  const [enviandoPedido, setEnviandoPedido] = useState(false);
 
   // Cierra con Escape — patrón esperado de cualquier panel/diálogo lateral.
   useEffect(() => {
@@ -116,5 +134,55 @@ export function usePedidoWhatsApp({ abierto, cerrar, items, comprador, numeroWha
     window.open(link, "_blank", "noopener,noreferrer");
   }
 
-  return { errores, campo, enviarPorWhatsApp };
+  // "Realizar pedido" — guarda el pedido en el sistema (estado "pendiente",
+  // ver /api/cliente/pedidos) SIN abrir WhatsApp: flujo nuevo, separado del
+  // de arriba (ver la nota grande en enviarPorWhatsApp — ese no cambió).
+  // Requiere perfil completo; si falta, tiembla + toast de advertencia en
+  // vez de dejar seguir (requisito explícito).
+  async function realizarPedido() {
+    if (items.length === 0 || enviandoPedido) return;
+
+    if (!perfilCompleto) {
+      setTemblando(true);
+      setTimeout(() => setTemblando(false), 400);
+      toast.warning("Completá tu perfil para poder realizar pedidos.", {
+        action: { label: "Completar perfil", onClick: () => router.push("/cliente/perfil") },
+      });
+      return;
+    }
+
+    const erroresActuales = validarComprador(comprador);
+    setErrores(erroresActuales);
+    if (Object.keys(erroresActuales).length > 0) {
+      const primerCampoConError = Object.keys(erroresActuales)[0] as keyof DatosComprador;
+      document.getElementById(`comprador-${primerCampoConError}`)?.focus();
+      return;
+    }
+
+    setEnviandoPedido(true);
+    try {
+      const resp = await fetch("/api/cliente/pedidos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items, comprador, total: totalCarrito(items) }),
+      });
+      const data = (await resp.json().catch(() => null)) as RespuestaPedido | null;
+      if (!resp.ok || !data?.ok || !data.pedido) {
+        toast.error(data?.mensaje ?? "No se pudo realizar el pedido.");
+        setEnviandoPedido(false);
+        return;
+      }
+
+      toast.success("Pedido realizado — lo vas a poder seguir desde Mis pedidos.");
+      vaciar();
+      cerrar();
+      router.push(`/cliente/pedidos/${data.pedido.id}`);
+    } catch (err) {
+      logError("usePedidoWhatsApp.realizarPedido", err, "No se pudo conectar con el servidor — revisá tu conexión a internet y probá de nuevo.");
+      toast.error("No se pudo conectar con el servidor.");
+      setEnviandoPedido(false);
+    }
+  }
+
+  return { errores, campo, enviarPorWhatsApp, realizarPedido, temblando, enviandoPedido };
 }

@@ -30,6 +30,11 @@ interface CarritoContextValor {
   // usePedidoWhatsApp para decidir si además de abrir WhatsApp intenta
   // guardar el pedido en /api/cliente/pedidos.
   clienteLogueado: boolean;
+  // Resuelto en el servidor junto con clienteLogueado (ver esa nota) —
+  // clientes.perfil_completo. false cuando no hay cliente logueado (no
+  // aplica) o cuando falta completar el onboarding. Lo usa el botón
+  // "Realizar pedido" del carrito para bloquear con shake+toast.
+  perfilCompleto: boolean;
   agregarItem: (item: Omit<ItemCarrito, "cantidad">, cantidad: number, opciones?: OpcionesAgregarItem) => void;
   actualizarCantidad: (itemId: string, cantidad: number) => void;
   quitarItem: (itemId: string) => void;
@@ -61,9 +66,10 @@ interface Props {
   // Resuelto en el servidor (RootLayout, vía obtenerClienteActivo) — ver la
   // nota en CarritoContextValor.
   clienteLogueado: boolean;
+  perfilCompleto: boolean;
 }
 
-export function CarritoProvider({ children, numeroWhatsApp: numeroConfigurado, clienteLogueado }: Props) {
+export function CarritoProvider({ children, numeroWhatsApp: numeroConfigurado, clienteLogueado, perfilCompleto }: Props) {
   // Arranca vacío en el server y en el primer render del cliente (evita
   // desajustes de hidratación); el contenido real de localStorage se carga
   // recién en el useEffect, que solo corre en el navegador.
@@ -151,6 +157,7 @@ export function CarritoProvider({ children, numeroWhatsApp: numeroConfigurado, c
       abierto,
       numeroWhatsApp,
       clienteLogueado,
+      perfilCompleto,
       agregarItem,
       actualizarCantidad,
       quitarItem,
@@ -159,7 +166,7 @@ export function CarritoProvider({ children, numeroWhatsApp: numeroConfigurado, c
       abrir,
       cerrar,
     }),
-    [items, comprador, abierto, numeroWhatsApp, clienteLogueado, agregarItem, actualizarCantidad, quitarItem, vaciar, abrir, cerrar],
+    [items, comprador, abierto, numeroWhatsApp, clienteLogueado, perfilCompleto, agregarItem, actualizarCantidad, quitarItem, vaciar, abrir, cerrar],
   );
 
   return <CarritoContext.Provider value={valor}>{children}</CarritoContext.Provider>;

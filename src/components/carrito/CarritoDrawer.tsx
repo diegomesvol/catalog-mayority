@@ -21,16 +21,19 @@ function confirmarVaciar(alConfirmar: () => void) {
 }
 
 export function CarritoDrawer() {
-  const { items, comprador, abierto, numeroWhatsApp, clienteLogueado, actualizarCantidad, quitarItem, vaciar, setComprador, cerrar } = useCarrito();
+  const { items, comprador, abierto, numeroWhatsApp, clienteLogueado, perfilCompleto, actualizarCantidad, quitarItem, vaciar, setComprador, cerrar } =
+    useCarrito();
   const numeroConfigurado = numeroWhatsApp;
-  const { errores, campo, enviarPorWhatsApp } = usePedidoWhatsApp({
+  const { errores, campo, enviarPorWhatsApp, realizarPedido, temblando, enviandoPedido } = usePedidoWhatsApp({
     abierto,
     cerrar,
     items,
     comprador,
     numeroWhatsApp,
     clienteLogueado,
+    perfilCompleto,
     setComprador,
+    vaciar,
   });
 
   return (
@@ -138,6 +141,18 @@ export function CarritoDrawer() {
                 <span className="text-sm text-ink-500">Total</span>
                 <span className="text-lg font-semibold text-ink-900">{formatearPrecio(totalCarrito(items))}</span>
               </div>
+              {clienteLogueado && (
+                <button
+                  type="button"
+                  onClick={() => void realizarPedido()}
+                  disabled={enviandoPedido}
+                  className={`mb-2 flex w-full items-center justify-center gap-2 rounded-full border-2 border-ink-900 px-4 py-3 text-sm font-medium text-ink-900 transition-colors hover:bg-ink-100 disabled:cursor-not-allowed disabled:opacity-50 ${
+                    temblando ? "animate-shake" : ""
+                  }`}
+                >
+                  {enviandoPedido ? "Enviando…" : "Realizar pedido"}
+                </button>
+              )}
               {!numeroConfigurado && (
                 <p className="mb-2 text-xs text-danger-600">
                   El envío por WhatsApp no está disponible por ahora. Probá de nuevo más tarde o contactá directamente a ventas.

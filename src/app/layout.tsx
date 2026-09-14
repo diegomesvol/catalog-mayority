@@ -58,7 +58,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   // (una vez por request) y se pasa como booleano a CarritoProvider — lo
   // único que necesita usePedidoWhatsApp para decidir si, además de abrir
   // WhatsApp, intenta guardar el pedido en /api/cliente/pedidos (ver la nota
-  // grande ahí). No se expone el perfil completo, solo si existe.
+  // grande ahí). perfilCompleto (la columna generada clientes.perfil_completo)
+  // sí se expone además del booleano de logueado — lo usa el botón "Realizar
+  // pedido" del carrito para bloquear con shake+toast si falta completarlo.
   const [config, clienteActivo] = await Promise.all([
     leerConfigSitio(),
     crearClienteServidor().then((supabase) => obtenerClienteActivo(supabase)),
@@ -77,7 +79,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             useSearchParams no rompa el build. */}
         <Suspense fallback={null}>
           <BusquedaProvider>
-            <CarritoProvider numeroWhatsApp={numeroWhatsApp} clienteLogueado={Boolean(clienteActivo)}>
+            <CarritoProvider
+              numeroWhatsApp={numeroWhatsApp}
+              clienteLogueado={Boolean(clienteActivo)}
+              perfilCompleto={clienteActivo?.perfilCompleto ?? false}
+            >
               {children}
               <CarritoDrawer />
             </CarritoProvider>

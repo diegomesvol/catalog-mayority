@@ -68,6 +68,21 @@ export function PedidosAdmin() {
     iniciar();
   }, []);
 
+  // Refresco simple (no tiempo real): al volver a esta pestaña (ej. el
+  // admin la dejó abierta y atendió otra cosa) se releen los pedidos solos,
+  // sin que tenga que acordarse de recargar la página a mano.
+  // "visibilitychange" en vez de "focus" — no dispara con clicks dentro de
+  // la misma ventana (ej. abrir un <select>), solo al volver de otra pestaña
+  // o app. mostrarCargando=false: no tiene sentido tapar la lista ya
+  // cargada con un skeleton por un refresco de fondo.
+  useEffect(() => {
+    function alVolver() {
+      if (document.visibilityState === "visible") void cargar(false);
+    }
+    document.addEventListener("visibilitychange", alVolver);
+    return () => document.removeEventListener("visibilitychange", alVolver);
+  }, []);
+
   function empezarEdicion(p: Pedido) {
     setBorrador({ ...borrador, [p.id]: { estado: p.estado, notas: p.notas_admin ?? "" } });
     setExpandido(expandido === p.id ? null : p.id);
@@ -100,8 +115,23 @@ export function PedidosAdmin() {
 
   return (
     <div className="rounded-2xl border border-ink-200 p-4 sm:p-5">
-      <h2 className="text-sm font-semibold text-ink-900">Pedidos</h2>
-      <p className="mt-1 text-xs text-ink-500">Pedidos guardados por clientes con cuenta propia — seguimiento de estado.</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-ink-900">Pedidos</h2>
+          <p className="mt-1 text-xs text-ink-500">Pedidos guardados por clientes con cuenta propia — seguimiento de estado.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => cargar()}
+          disabled={cargando}
+          className="flex shrink-0 items-center gap-1.5 rounded-full border border-ink-200 px-3 py-1.5 text-xs font-medium text-ink-700 transition-colors hover:bg-ink-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v6h-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Actualizar
+        </button>
+      </div>
 
       {cargando ? (
         <div className="mt-4 space-y-2" aria-label="Cargando pedidos" role="status">

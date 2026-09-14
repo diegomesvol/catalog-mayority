@@ -129,6 +129,13 @@ select:disabled {
     background-image: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
     animation: skeleton-shimmer 1.6s infinite;
   }
+
+  /* Feedback de "no podés hacer esto todavía" (ej. botón "Realizar pedido"
+     con el perfil incompleto, ver CarritoDrawer/usePedidoWhatsApp) — una
+     sola pasada, no en loop como el shimmer de arriba. */
+  .animate-shake {
+    animation: shake 0.4s ease-in-out;
+  }
 }
 
 @keyframes skeleton-shimmer {
@@ -137,8 +144,31 @@ select:disabled {
   }
 }
 
+@keyframes shake {
+  10%,
+  90% {
+    transform: translateX(-1px);
+  }
+  20%,
+  80% {
+    transform: translateX(2px);
+  }
+  30%,
+  50%,
+  70% {
+    transform: translateX(-4px);
+  }
+  40%,
+  60% {
+    transform: translateX(4px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .skeleton::after {
+    animation: none;
+  }
+  .animate-shake {
     animation: none;
   }
 }

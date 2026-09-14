@@ -13,6 +13,48 @@ export interface PerfilCliente {
   telefono: string;
   rif: string;
   activo: boolean;
+  // Campos del onboarding (ver lib/schemas/perfilCliente.ts) — null hasta
+  // que el cliente los completa. perfilCompleto es la columna generada
+  // clientes.perfil_completo: una sola fuente de verdad, no se recalcula acá.
+  logoUrl: string | null;
+  telefono2: string | null;
+  direccion: string | null;
+  ciudad: string | null;
+  estadoUbicacion: string | null;
+  metodosPago: string[];
+  perfilCompleto: boolean;
+}
+
+interface FilaClienteDB {
+  nombre: string;
+  empresa: string;
+  telefono: string;
+  rif: string;
+  activo: boolean;
+  logo_url: string | null;
+  telefono_2: string | null;
+  direccion: string | null;
+  ciudad: string | null;
+  estado_ubicacion: string | null;
+  metodos_pago: string[];
+  perfil_completo: boolean;
+}
+
+function mapearPerfilDesdeDB(fila: FilaClienteDB): PerfilCliente {
+  return {
+    nombre: fila.nombre,
+    empresa: fila.empresa,
+    telefono: fila.telefono,
+    rif: fila.rif,
+    activo: fila.activo,
+    logoUrl: fila.logo_url,
+    telefono2: fila.telefono_2,
+    direccion: fila.direccion,
+    ciudad: fila.ciudad,
+    estadoUbicacion: fila.estado_ubicacion,
+    metodosPago: fila.metodos_pago ?? [],
+    perfilCompleto: fila.perfil_completo,
+  };
 }
 
 /**
@@ -29,7 +71,7 @@ export async function obtenerClienteActivo(supabase: SupabaseClient): Promise<Pe
 
   const { data: perfil, error } = await supabase
     .from("clientes")
-    .select("nombre, empresa, telefono, rif, activo")
+    .select("nombre, empresa, telefono, rif, activo, logo_url, telefono_2, direccion, ciudad, estado_ubicacion, metodos_pago, perfil_completo")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -37,7 +79,7 @@ export async function obtenerClienteActivo(supabase: SupabaseClient): Promise<Pe
   // RLS/permiso acá no debe quedar indistinguible de "no es cliente".
   if (error) logError("obtenerClienteActivo", error);
   if (!perfil || !perfil.activo) return null;
-  return perfil as PerfilCliente;
+  return mapearPerfilDesdeDB(perfil as FilaClienteDB);
 }
 
 /** Igual que requierePermisoEscritura (lib/auth.ts) pero para rutas /api/cliente/*. */
