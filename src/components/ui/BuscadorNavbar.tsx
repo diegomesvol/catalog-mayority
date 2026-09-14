@@ -65,7 +65,7 @@ export function BuscadorNavbar() {
         <button
           type="submit"
           aria-label="Buscar en el catálogo"
-          className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${valor ? "text-white" : "text-ink-500"}`}
+          className={`absolute left-2.5 top-1/2 -translate-y-1/2 transition-colors duration-200 ${valor ? "text-ink-900" : "text-ink-500"}`}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
             <circle cx="11" cy="11" r="7" />
@@ -78,12 +78,13 @@ export function BuscadorNavbar() {
           placeholder={enCatalogo ? "Buscar…" : "Buscar en el catálogo…"}
           value={valor}
           onChange={(e) => onChange(e.target.value)}
-          // Mismo criterio visual que un Select/chip de filtro activo (ver
-          // Filtros.tsx): borde + fondo marcados en cuanto hay texto, para
-          // que quede claro de un vistazo que ese filtro sigue puesto aunque
-          // el buscador ya no tenga el foco.
-          className={`w-full rounded-full border py-1.5 pl-8 pr-3 text-sm placeholder:text-ink-500 focus:border-accent-600 ${
-            valor ? "border-ink-900 bg-ink-900 font-medium text-white" : "border-ink-200 bg-paper-raised text-ink-900"
+          // Fondo siempre claro/transparente (nunca se rellena de negro):
+          // el filtro activo se comunica solo con el borde y el ícono
+          // pasando a ink-900, más el texto en negrita — un contraste
+          // sutil pero claro, con transición fluida, en vez de repintar
+          // toda la barra al escribir.
+          className={`w-full rounded-full border bg-paper-raised py-1.5 pl-8 pr-3 text-sm text-ink-900 placeholder:text-ink-500 transition-colors duration-200 focus:border-accent-600 ${
+            valor ? "border-ink-900 font-medium" : "border-ink-200"
           }`}
         />
       </div>

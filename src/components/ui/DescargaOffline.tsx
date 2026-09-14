@@ -46,7 +46,7 @@ export function DescargaOffline() {
                 : "Descargar catálogo para verlo sin conexión"
         }
         title={hayDesactualizada ? "El catálogo cambió desde tu última descarga — volvé a descargar" : undefined}
-        className={`relative flex shrink-0 items-center gap-1.5 overflow-hidden rounded-full border px-3.5 py-2 text-sm font-medium transition-colors disabled:cursor-wait ${
+        className={`relative flex shrink-0 items-center gap-1.5 overflow-hidden rounded-full border px-2.5 py-2 text-sm font-medium transition-colors disabled:cursor-wait sm:px-3.5 ${
           descargando
             ? // Mismo tratamiento "suave" (fondo pastel + texto/borde del
               // color, sin relleno sólido) que el estado "Descargado" de acá

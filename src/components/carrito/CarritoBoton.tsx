@@ -11,7 +11,7 @@ export function CarritoBoton() {
       type="button"
       onClick={abrir}
       aria-label={`Ver pedido${cantidad > 0 ? ` — ${cantidad} producto${cantidad === 1 ? "" : "s"}` : ""}`}
-      className="relative ml-auto flex shrink-0 items-center gap-1.5 rounded-full border border-ink-200 px-3.5 py-2 text-sm font-medium text-ink-900 transition-colors hover:border-ink-900"
+      className="relative ml-auto flex shrink-0 items-center gap-1.5 rounded-full border border-ink-200 px-2.5 py-2 text-sm font-medium text-ink-900 transition-colors hover:border-ink-900 sm:px-3.5"
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
         <circle cx="9" cy="21" r="1" />
