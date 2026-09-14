@@ -143,7 +143,7 @@ export function CargadorCatalogo({ bloqueadoPorOtraOperacion, onOperacionCritica
                 type="button"
                 onClick={() => setOrigen(valor)}
                 className={`rounded-full border px-3.5 py-2 text-sm font-medium transition-colors ${
-                  origen === valor ? "border-ink-900 bg-ink-900 text-white" : "border-ink-200 text-ink-700"
+                  origen === valor ? "border-ink-900 bg-ink-900 text-white" : "border-ink-200 text-ink-700 hover:border-ink-900"
                 }`}
               >
                 {etiqueta}

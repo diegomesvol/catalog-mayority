@@ -42,7 +42,7 @@ export function ResumenPrevio({ resumen, diff, onConfirmar, onCancelar, confirma
           type="button"
           onClick={onCancelar}
           disabled={confirmando}
-          className="rounded-full border border-ink-200 px-4 py-2.5 text-sm font-medium text-ink-900 disabled:opacity-50"
+          className="rounded-full border border-ink-200 px-4 py-2.5 text-sm font-medium text-ink-900 transition-colors hover:border-ink-900 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-ink-200"
         >
           Cancelar
         </button>

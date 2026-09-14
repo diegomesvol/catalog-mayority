@@ -117,7 +117,11 @@ export function PedidosAdmin() {
             const edicion = borrador[p.id];
             return (
               <li key={p.id} className="py-3">
-                <button type="button" onClick={() => empezarEdicion(p)} className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-1 text-left text-sm">
+                <button
+                  type="button"
+                  onClick={() => empezarEdicion(p)}
+                  className="-mx-2 flex w-[calc(100%+1rem)] flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-lg px-2 py-1 text-left text-sm transition-colors hover:bg-ink-100"
+                >
                   <div className="flex flex-col">
                     <span className="text-ink-900">{p.cliente ? `${p.cliente.nombre} — ${p.cliente.empresa}` : "Cliente eliminado"}</span>
                     <span className="text-xs text-ink-500">

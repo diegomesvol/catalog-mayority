@@ -187,7 +187,7 @@ function TarjetaColeccionVista({
             onClick={onMoverArriba}
             disabled={esPrimera}
             aria-label="Mover arriba"
-            className="rounded-lg border border-ink-200 px-2 py-1 text-xs text-ink-700 disabled:cursor-not-allowed disabled:opacity-30"
+            className="rounded-lg border border-ink-200 px-2 py-1 text-xs text-ink-700 transition-colors hover:border-ink-900 hover:bg-ink-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-ink-200 disabled:hover:bg-transparent"
           >
             ↑
           </button>
@@ -196,7 +196,7 @@ function TarjetaColeccionVista({
             onClick={onMoverAbajo}
             disabled={esUltima}
             aria-label="Mover abajo"
-            className="rounded-lg border border-ink-200 px-2 py-1 text-xs text-ink-700 disabled:cursor-not-allowed disabled:opacity-30"
+            className="rounded-lg border border-ink-200 px-2 py-1 text-xs text-ink-700 transition-colors hover:border-ink-900 hover:bg-ink-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-ink-200 disabled:hover:bg-transparent"
           >
             ↓
           </button>
@@ -302,7 +302,7 @@ function TarjetaColeccionEditor({
             onClick={onMoverArriba}
             disabled={esPrimera}
             aria-label="Mover arriba"
-            className="rounded-lg border border-ink-200 px-2 py-1 text-xs text-ink-700 disabled:cursor-not-allowed disabled:opacity-30"
+            className="rounded-lg border border-ink-200 px-2 py-1 text-xs text-ink-700 transition-colors hover:border-ink-900 hover:bg-ink-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-ink-200 disabled:hover:bg-transparent"
           >
             ↑
           </button>
@@ -311,7 +311,7 @@ function TarjetaColeccionEditor({
             onClick={onMoverAbajo}
             disabled={esUltima}
             aria-label="Mover abajo"
-            className="rounded-lg border border-ink-200 px-2 py-1 text-xs text-ink-700 disabled:cursor-not-allowed disabled:opacity-30"
+            className="rounded-lg border border-ink-200 px-2 py-1 text-xs text-ink-700 transition-colors hover:border-ink-900 hover:bg-ink-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-ink-200 disabled:hover:bg-transparent"
           >
             ↓
           </button>

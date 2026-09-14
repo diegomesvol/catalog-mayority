@@ -83,7 +83,7 @@ function Seccion({
         type="button"
         onClick={() => setAbierto((v) => !v)}
         aria-expanded={abierto}
-        className="flex w-full items-center justify-between px-3.5 py-2.5 text-left"
+        className="flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left transition-colors hover:bg-ink-100"
       >
         <span className="text-sm font-medium text-ink-900">
           {titulo} <span className={`font-semibold ${colorAcento}`}>({cantidad})</span>

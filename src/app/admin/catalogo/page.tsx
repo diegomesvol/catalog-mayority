@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { PanelAdmin } from "@/components/admin/PanelAdmin";
 import { HistorialCargas } from "@/components/admin/HistorialCargas";
+import { GuiaTallasConfig } from "@/components/admin/GuiaTallasConfig";
 import { leerHistorial } from "@/lib/blob";
 
 export const metadata = { title: "Catálogo · Panel de administración" };
@@ -15,6 +16,7 @@ export default async function PaginaAdminCatalogo() {
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
         <PanelAdmin />
         <HistorialCargas entradas={historial} />
+        <GuiaTallasConfig />
         <p className="mt-6 text-center text-xs text-ink-500">
           <Link href="/" className="underline-offset-2 hover:underline">
             Ver catálogo público

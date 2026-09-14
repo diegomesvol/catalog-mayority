@@ -57,10 +57,18 @@ export function AdminHeader({ children }: { children: ReactNode }) {
 
       {/* "min-w-0": sin esto un hijo ancho (ej. una tabla en /admin/catalogo)
           empujaría toda la columna — y con ella el sidebar — más ancha que
-          la pantalla, en vez de scrollear puntualmente adentro. */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-ink-200 bg-paper-raised">
-          <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3.5 sm:px-6">
+          la pantalla, en vez de scrollear puntualmente adentro.
+          "overflow-x-hidden": red de seguridad adicional — cualquier
+          contenido que aun así se pase de ancho (ej. un tooltip o badge mal
+          medido) queda contenido acá en vez de empujar un scroll horizontal
+          a toda la página. */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
+        {/* "h-[57px]": mismo alto exacto que la franja superior del sidebar
+            (ver AdminNav) — con alturas distintas, el border-b de acá y el
+            border-r del sidebar no coincidían en la esquina y se veía un
+            "escalón" en vez de una unión limpia entre las dos líneas. */}
+        <header className="flex h-[57px] shrink-0 items-center border-b border-ink-200 bg-paper-raised">
+          <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 px-4 sm:px-6">
             <div className="flex min-w-0 items-center gap-2">
               {/* Drawer de mobile/tablet: el sidebar de acá arriba solo se ve
                   desde "lg" (ver AdminNav), por debajo de eso la navegación
@@ -81,7 +89,7 @@ export function AdminHeader({ children }: { children: ReactNode }) {
               type="button"
               onClick={salir}
               disabled={saliendo}
-              className="shrink-0 text-sm font-medium text-ink-500 hover:text-ink-900 disabled:opacity-50"
+              className="shrink-0 rounded-full px-2.5 py-1 text-sm font-medium text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Cerrar sesión
             </button>

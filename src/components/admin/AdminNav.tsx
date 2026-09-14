@@ -81,7 +81,16 @@ export function AdminNav({ rol }: { rol: RolAdmin | null }) {
         </button>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-2" aria-label="Secciones del panel">
+      {/* Sin "overflow-y-auto": NAV_ADMIN tiene solo 6 secciones fijas, que
+          siempre entran de sobra en el alto del sidebar (h-screen) — no hace
+          falta scroll interno. Ponerlo causaba un bug real: CSS fuerza
+          overflow-x a "auto" en cuanto overflow-y no es "visible" (regla del
+          spec de overflow), así que el tooltip del modo colapsado (que se
+          posiciona por fuera de este <nav>, ver más abajo) quedaba
+          clippeado/con scroll horizontal propio en vez de flotar limpio
+          sobre el contenido — esa era la causa del scroll horizontal no
+          deseado en el panel. */}
+      <nav className="flex flex-1 flex-col gap-1 p-2" aria-label="Secciones del panel">
         {items.map((item) => {
           const activo = esItemActivo(item, pathname);
           return (
