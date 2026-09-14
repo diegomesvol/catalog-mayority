@@ -37,8 +37,13 @@ export function ClientesAdmin() {
   const [errores, setErrores] = useState<Errores>({});
   const [invitando, setInvitando] = useState(false);
 
-  async function cargar() {
-    setCargando(true);
+  // mostrarCargando=false en el efecto de montaje: `cargando` ya arranca en
+  // true (useState inicial), así que no hace falta volver a setearlo ahí —
+  // hacerlo synchronously dentro de un efecto dispara el warning de React
+  // "set-state-in-effect" (cascading renders). Al recargar tras invitar sí
+  // se quiere el aviso de carga, por eso el default sigue siendo true.
+  async function cargar(mostrarCargando = true) {
+    if (mostrarCargando) setCargando(true);
     try {
       const { resp, data } = await fetchJson<{ ok: boolean; clientes?: Cliente[]; mensaje?: string }>("/api/admin/clientes");
       if (!resp.ok || !data?.ok || !data.clientes) throw new Error(data?.mensaje ?? "No se pudieron leer los clientes.");
@@ -52,7 +57,15 @@ export function ClientesAdmin() {
   }
 
   useEffect(() => {
-    cargar();
+    // El "await" inicial difiere la llamada a cargar() (y su eventual
+    // setState) un microtask — evita el warning set-state-in-effect sin
+    // cambiar el comportamiento percibido. Ver la misma nota en
+    // admin/invitacion/page.tsx.
+    async function iniciar() {
+      await Promise.resolve();
+      await cargar(false);
+    }
+    iniciar();
   }, []);
 
   function campo<K extends keyof typeof VACIO>(clave: K, valor: string) {

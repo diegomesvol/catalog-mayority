@@ -21,35 +21,43 @@ export default function PaginaInvitacionCliente() {
   const [errores, setErrores] = useState<Errores>({});
 
   useEffect(() => {
-    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const errorDescripcion = hash.get("error_description");
-    const accessToken = hash.get("access_token");
-    const refreshToken = hash.get("refresh_token");
+    // async + el "await" inicial difieren estas actualizaciones de estado un
+    // microtask (evita el warning set-state-in-effect) — ver la nota grande
+    // en admin/invitacion/page.tsx.
+    async function verificar() {
+      await Promise.resolve();
 
-    window.history.replaceState(null, "", window.location.pathname);
+      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const errorDescripcion = hash.get("error_description");
+      const accessToken = hash.get("access_token");
+      const refreshToken = hash.get("refresh_token");
 
-    if (errorDescripcion) {
-      setMensajeError(decodeURIComponent(errorDescripcion.replace(/\+/g, " ")));
-      setEstado("invalido");
-      return;
-    }
-    if (!accessToken || !refreshToken) {
-      setMensajeError("Este link no es válido. Pedí que te reenvíen la invitación.");
-      setEstado("invalido");
-      return;
-    }
+      window.history.replaceState(null, "", window.location.pathname);
 
-    crearClienteNavegador()
-      .auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
-      .then(({ error }) => {
-        if (error) {
-          logError("PaginaInvitacionCliente.setSession", error);
-          setMensajeError("El link expiró o ya se usó. Pedí que te reenvíen la invitación.");
-          setEstado("invalido");
-          return;
-        }
-        setEstado("listo");
+      if (errorDescripcion) {
+        setMensajeError(decodeURIComponent(errorDescripcion.replace(/\+/g, " ")));
+        setEstado("invalido");
+        return;
+      }
+      if (!accessToken || !refreshToken) {
+        setMensajeError("Este link no es válido. Pedí que te reenvíen la invitación.");
+        setEstado("invalido");
+        return;
+      }
+
+      const { error } = await crearClienteNavegador().auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
       });
+      if (error) {
+        logError("PaginaInvitacionCliente.setSession", error);
+        setMensajeError("El link expiró o ya se usó. Pedí que te reenvíen la invitación.");
+        setEstado("invalido");
+        return;
+      }
+      setEstado("listo");
+    }
+    verificar();
   }, []);
 
   async function onSubmit(e: FormEvent) {
@@ -75,6 +83,7 @@ export default function PaginaInvitacionCliente() {
         return;
       }
       toast.success("Contraseña definida. Ingresando…");
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- intencional, misma razón que admin/invitacion/page.tsx
       window.location.href = "/cliente";
     } catch (err) {
       logError("PaginaInvitacionCliente.onSubmit", err);

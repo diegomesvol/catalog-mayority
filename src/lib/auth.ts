@@ -6,6 +6,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { logError } from "./logger";
 
 export type RolAdmin = "superadmin" | "admin" | "editor";
 
@@ -31,12 +32,17 @@ export async function obtenerAdminActivo(supabase: SupabaseClient): Promise<Perf
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: perfil } = await supabase
+  const { data: perfil, error } = await supabase
     .from("admin_perfiles")
     .select("nombre, rol, activo, solo_lectura")
     .eq("user_id", user.id)
     .maybeSingle();
 
+  // Un error acá (ej. permission denied por una política/función RLS mal
+  // otorgada) no debe confundirse con "no tiene perfil": se loguea para que
+  // quede visible en los logs del servidor en vez de aparecer, sin
+  // explicación, como "tu cuenta no tiene acceso al panel".
+  if (error) logError("obtenerAdminActivo", error);
   if (!perfil || !perfil.activo) return null;
   return perfil as PerfilAdmin;
 }

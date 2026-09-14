@@ -21,37 +21,47 @@ export default function PaginaInvitacion() {
   const [errores, setErrores] = useState<Errores>({});
 
   useEffect(() => {
-    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const errorDescripcion = hash.get("error_description");
-    const accessToken = hash.get("access_token");
-    const refreshToken = hash.get("refresh_token");
+    // async + el "await" inicial difieren estas actualizaciones de estado un
+    // microtask, para que no corran de forma síncrona dentro del efecto (la
+    // lectura de window.location.hash sí tiene que hacerse en un efecto —
+    // no existe del lado del servidor — pero el resultado no hace falta
+    // aplicarlo síncronamente).
+    async function verificar() {
+      await Promise.resolve();
 
-    // Se limpia el hash apenas se lee — el token no debe quedar visible ni
-    // guardado en el historial del navegador.
-    window.history.replaceState(null, "", window.location.pathname);
+      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const errorDescripcion = hash.get("error_description");
+      const accessToken = hash.get("access_token");
+      const refreshToken = hash.get("refresh_token");
 
-    if (errorDescripcion) {
-      setMensajeError(decodeURIComponent(errorDescripcion.replace(/\+/g, " ")));
-      setEstado("invalido");
-      return;
-    }
-    if (!accessToken || !refreshToken) {
-      setMensajeError("Este link no es válido. Pedí que te reenvíen la invitación.");
-      setEstado("invalido");
-      return;
-    }
+      // Se limpia el hash apenas se lee — el token no debe quedar visible ni
+      // guardado en el historial del navegador.
+      window.history.replaceState(null, "", window.location.pathname);
 
-    crearClienteNavegador()
-      .auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
-      .then(({ error }) => {
-        if (error) {
-          logError("PaginaInvitacion.setSession", error);
-          setMensajeError("El link expiró o ya se usó. Pedí que te reenvíen la invitación.");
-          setEstado("invalido");
-          return;
-        }
-        setEstado("listo");
+      if (errorDescripcion) {
+        setMensajeError(decodeURIComponent(errorDescripcion.replace(/\+/g, " ")));
+        setEstado("invalido");
+        return;
+      }
+      if (!accessToken || !refreshToken) {
+        setMensajeError("Este link no es válido. Pedí que te reenvíen la invitación.");
+        setEstado("invalido");
+        return;
+      }
+
+      const { error } = await crearClienteNavegador().auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
       });
+      if (error) {
+        logError("PaginaInvitacion.setSession", error);
+        setMensajeError("El link expiró o ya se usó. Pedí que te reenvíen la invitación.");
+        setEstado("invalido");
+        return;
+      }
+      setEstado("listo");
+    }
+    verificar();
   }, []);
 
   async function onSubmit(e: FormEvent) {
@@ -79,6 +89,7 @@ export default function PaginaInvitacion() {
       toast.success("Contraseña definida. Ingresando…");
       // Navegación dura: la sesión ya quedó en cookies (setSession la
       // sincronizó), el proxy server-side la valida en el siguiente request.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- intencional, ver comentario arriba
       window.location.href = "/admin";
     } catch (err) {
       logError("PaginaInvitacion.onSubmit", err);

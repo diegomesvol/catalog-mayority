@@ -5,6 +5,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { logError } from "./logger";
 
 export interface PerfilCliente {
   nombre: string;
@@ -26,12 +27,15 @@ export async function obtenerClienteActivo(supabase: SupabaseClient): Promise<Pe
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: perfil } = await supabase
+  const { data: perfil, error } = await supabase
     .from("clientes")
     .select("nombre, empresa, telefono, rif, activo")
     .eq("user_id", user.id)
     .maybeSingle();
 
+  // Ver la nota equivalente en obtenerAdminActivo (lib/auth.ts): un error de
+  // RLS/permiso acá no debe quedar indistinguible de "no es cliente".
+  if (error) logError("obtenerClienteActivo", error);
   if (!perfil || !perfil.activo) return null;
   return perfil as PerfilCliente;
 }

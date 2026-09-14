@@ -19,8 +19,12 @@ import { useBusqueda } from "@/components/catalogo/BusquedaContext";
 export function BuscadorNavbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { busqueda, setBusqueda } = useBusqueda();
-  const enCatalogo = pathname === "/";
+  const { busqueda, setBusqueda, modoVivo } = useBusqueda();
+  // pathname === "/" no alcanza: en "/" puede estar mostrándose el landing
+  // de colecciones (sin grilla montada) en vez del catálogo — ver la nota
+  // en BusquedaContext.tsx. Ahí, igual que en el detalle de producto, el
+  // input queda como borrador local y Enter navega a "/?q=…".
+  const enCatalogo = pathname === "/" && modoVivo;
   const id = useId();
 
   const [borrador, setBorrador] = useState(busqueda);

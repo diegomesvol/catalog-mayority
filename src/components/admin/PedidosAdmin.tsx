@@ -42,8 +42,10 @@ export function PedidosAdmin() {
   const [borrador, setBorrador] = useState<Record<string, { estado: Estado; notas: string }>>({});
   const [guardandoId, setGuardandoId] = useState<string | null>(null);
 
-  async function cargar() {
-    setCargando(true);
+  // mostrarCargando=false en el efecto de montaje — ver la misma nota en
+  // ClientesAdmin.cargar (evita el warning "set-state-in-effect").
+  async function cargar(mostrarCargando = true) {
+    if (mostrarCargando) setCargando(true);
     try {
       const { resp, data } = await fetchJson<{ ok: boolean; pedidos?: Pedido[]; mensaje?: string }>("/api/admin/pedidos");
       if (!resp.ok || !data?.ok || !data.pedidos) throw new Error(data?.mensaje ?? "No se pudieron leer los pedidos.");
@@ -57,7 +59,13 @@ export function PedidosAdmin() {
   }
 
   useEffect(() => {
-    cargar();
+    // Ver la nota equivalente en ClientesAdmin — difiere la llamada un
+    // microtask para evitar el warning set-state-in-effect.
+    async function iniciar() {
+      await Promise.resolve();
+      await cargar(false);
+    }
+    iniciar();
   }, []);
 
   function empezarEdicion(p: Pedido) {
