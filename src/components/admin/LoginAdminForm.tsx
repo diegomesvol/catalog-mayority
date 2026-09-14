@@ -6,17 +6,20 @@ import { toast } from "sonner";
 import { logError } from "@/lib/logger";
 import { loginAdminSchema } from "@/lib/schemas/loginAdmin";
 import { crearClienteNavegador } from "@/lib/supabaseNavegador";
+import { AccesoNoAutorizado } from "@/components/ui/AccesoNoAutorizado";
 import { IconoGoogle } from "./IconoGoogle";
 
 type Errores = Partial<Record<"email" | "password", string>>;
 
 // Mensajes que puede traer /admin/login?error=… — los deja el callback de
-// OAuth (api/admin/auth/callback/route.ts) después de un redirect, así que
-// se leen y se muestran acá como toast en vez de renderizarlos server-side
-// (evita que quede pegado en la URL si el admin refresca).
+// OAuth (api/admin/auth/callback/route.ts) o el proxy (sesión revocada por
+// acceso directo, ver proxy.ts) después de un redirect, así que se leen acá
+// en vez de renderizarlos server-side (evita que quede pegado en la URL si
+// el admin refresca). "sin_acceso" no es un toast — muestra la card de
+// AccesoNoAutorizado (ver el efecto de abajo); solo "oauth" (falló el
+// intercambio con Google, no es un tema de autorización) sigue siendo toast.
 const MENSAJES_ERROR_OAUTH: Record<string, string> = {
   oauth: "No se pudo completar el ingreso con Google. Probá de nuevo.",
-  sin_acceso: "Tu cuenta no tiene acceso al panel de administración.",
 };
 
 // Formulario de login — antes era toda la página (app/admin/login/page.tsx);
@@ -32,15 +35,22 @@ export function LoginAdminForm() {
   const [errores, setErrores] = useState<Errores>({});
   const [cargando, setCargando] = useState(false);
   const [cargandoGoogle, setCargandoGoogle] = useState(false);
+  // Presencia (no null) = mostrar la card en vez del formulario. El email es
+  // opcional: se conoce si vino del login por password (submit de abajo),
+  // pero no si vino de Google o de una sesión revocada por el proxy.
+  const [accesoDenegado, setAccesoDenegado] = useState<{ email?: string } | null>(null);
 
   useEffect(() => {
     const error = searchParams.get("error");
-    if (error && MENSAJES_ERROR_OAUTH[error]) {
+    if (!error) return;
+    // Limpia el parámetro para que un refresh no vuelva a repetir la card/el
+    // toast — igual criterio que PaginaInvitacion con el hash del token (no
+    // debe quedar pegado en el historial del navegador).
+    window.history.replaceState(null, "", window.location.pathname);
+    if (error === "sin_acceso") {
+      setAccesoDenegado({});
+    } else if (MENSAJES_ERROR_OAUTH[error]) {
       toast.error(MENSAJES_ERROR_OAUTH[error]);
-      // Limpia el parámetro para que un refresh no vuelva a mostrar el
-      // mismo toast — igual criterio que PaginaInvitacion con el hash del
-      // token (no debe quedar pegado en el historial del navegador).
-      window.history.replaceState(null, "", window.location.pathname);
     }
   }, [searchParams]);
 
@@ -68,6 +78,11 @@ export function LoginAdminForm() {
       });
       const data = await resp.json();
       if (!resp.ok || !data.ok) {
+        if (data.codigo === "SIN_ACCESO") {
+          setAccesoDenegado({ email });
+          setCargando(false);
+          return;
+        }
         if (data.requiereGoogle) {
           // Toast con acción directa — no tiene sentido bloquear al admin
           // con el mensaje y dejar que busque el botón de Google por su
@@ -114,6 +129,10 @@ export function LoginAdminForm() {
       toast.error("No se pudo conectar con el servidor.");
       setCargandoGoogle(false);
     }
+  }
+
+  if (accesoDenegado) {
+    return <AccesoNoAutorizado email={accesoDenegado.email} onReintentar={() => setAccesoDenegado(null)} />;
   }
 
   return (

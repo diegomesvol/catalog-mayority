@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { leerConfigSitio } from "@/lib/blob";
 import { LoginClienteForm } from "@/components/cliente/LoginClienteForm";
 
@@ -5,10 +6,9 @@ export const metadata = { title: "Ingresar · Mi cuenta" };
 export const dynamic = "force-dynamic";
 
 // Mismo wrapper visual que /admin/login/page.tsx (mismo fondo configurable,
-// mismo degradé) — portal unificado en el look, aunque el formulario en sí
-// (LoginClienteForm) sigue siendo su propio Client Component con su propio
-// backend (ver la nota ahí). No usa Suspense/useSearchParams como el de
-// admin porque este formulario no tiene mensajes de error por query param.
+// mismo degradé) — portal unificado en el look. LoginClienteForm ahora lee
+// ?error=sin_acceso (ver proxy.ts) vía useSearchParams, así que necesita el
+// mismo boundary de Suspense que el de admin.
 export default async function PaginaLoginCliente() {
   const { fondoLoginUrl } = await leerConfigSitio();
 
@@ -22,7 +22,9 @@ export default async function PaginaLoginCliente() {
         <div className="absolute inset-0 bg-gradient-to-br from-ink-900/80 via-ink-900/45 to-ink-900/75" />
       </div>
 
-      <LoginClienteForm />
+      <Suspense fallback={null}>
+        <LoginClienteForm />
+      </Suspense>
     </main>
   );
 }

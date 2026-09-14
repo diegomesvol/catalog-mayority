@@ -28,7 +28,13 @@ export async function POST(request: NextRequest) {
     const cliente = await obtenerClienteActivo(supabase);
     if (!cliente) {
       await supabase.auth.signOut();
-      return NextResponse.json({ ok: false, mensaje: "Tu cuenta no tiene acceso a este portal." }, { status: 403 });
+      // codigo: "SIN_ACCESO" — ver la misma nota en api/admin/login/route.ts:
+      // mensaje genérico a propósito, no distingue no-existe/desactivado/
+      // nunca-invitado (evita enumeración de cuentas).
+      return NextResponse.json(
+        { ok: false, mensaje: "Tu cuenta no tiene acceso a este portal.", codigo: "SIN_ACCESO" },
+        { status: 403 },
+      );
     }
 
     return NextResponse.json({ ok: true });

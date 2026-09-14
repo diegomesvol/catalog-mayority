@@ -20,6 +20,10 @@ import { obtenerClienteActivo } from "@/lib/clienteAuth";
 const RUTAS_PUBLICAS = [
   "/admin/login",
   "/api/admin/login",
+  // Recibe el "code" de Google y hace exchangeCodeForSession — es la ruta
+  // que CREA la sesión, así que no puede exigir una sesión ya activa (el
+  // propio handler valida el code y el perfil admin antes de dejar pasar).
+  "/api/admin/auth/callback",
   "/admin/invitacion",
   "/cliente/login",
   "/api/cliente/login",
@@ -44,13 +48,36 @@ export async function proxy(request: NextRequest) {
   const perfil = esArbolCliente ? await obtenerClienteActivo(supabase) : await obtenerAdminActivo(supabase);
 
   if (!perfil) {
+    // obtenerAdminActivo/obtenerClienteActivo devuelven null tanto si no hay
+    // sesión como si la hay pero sin fila activa (no invitado, desactivado).
+    // Ese segundo caso es una sesión de Supabase Auth "colgada" — sin esto
+    // quedaría redirigiendo al login en bucle sin explicar por qué. Se
+    // revoca acá mismo (no solo en las rutas de login) para cubrir también
+    // el acceso directo por URL con una sesión ya inválida.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) await supabase.auth.signOut();
+
+    // signOut() (y el refresco normal de sesión) escribieron sus cookies en
+    // `response` vía crearClienteProxy — pero acá abajo se devuelve un
+    // response DISTINTO (redirect o json). Sin copiar esas cookies se
+    // pierden y la sesión queda "viva" en el navegador pese al signOut.
+    const conCookies = (destino: NextResponse) => {
+      response.cookies.getAll().forEach((cookie) => destino.cookies.set(cookie));
+      return destino;
+    };
+
     if (pathname.startsWith("/api/")) {
-      return NextResponse.json({ ok: false, mensaje: "No autenticado" }, { status: 401 });
+      return conCookies(
+        NextResponse.json({ ok: false, mensaje: "No autenticado.", codigo: user ? "SIN_ACCESO" : undefined }, { status: 401 }),
+      );
     }
     const url = request.nextUrl.clone();
     url.pathname = esArbolCliente ? "/cliente/login" : "/admin/login";
     url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+    if (user) url.searchParams.set("error", "sin_acceso");
+    return conCookies(NextResponse.redirect(url));
   }
 
   return response;

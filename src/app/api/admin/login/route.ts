@@ -74,8 +74,14 @@ export async function POST(request: NextRequest) {
     const admin = await obtenerAdminActivo(supabase);
     if (!admin) {
       await supabase.auth.signOut();
+      // codigo: "SIN_ACCESO" — lo usa LoginAdminForm para mostrar la card de
+      // AccesoNoAutorizado en vez de un toast (ver components/ui). El
+      // mensaje es el mismo genérico sea cual sea el motivo real (no
+      // existe, desactivado, nunca invitado) — no distinguir evita que
+      // alguien use este endpoint para "probar" qué emails están dados de
+      // alta en el sistema.
       return NextResponse.json(
-        { ok: false, mensaje: "Tu cuenta no tiene acceso al panel de administración." },
+        { ok: false, mensaje: "Tu cuenta no tiene acceso al panel de administración.", codigo: "SIN_ACCESO" },
         { status: 403 },
       );
     }

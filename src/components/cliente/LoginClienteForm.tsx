@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { logError } from "@/lib/logger";
 import { loginAdminSchema } from "@/lib/schemas/loginAdmin";
+import { AccesoNoAutorizado } from "@/components/ui/AccesoNoAutorizado";
 
 // Mismo look que LoginAdminForm.tsx (misma card, mismos estilos de input)
 // a propósito — portal visualmente unificado, aunque el backend sigue
@@ -14,10 +16,23 @@ import { loginAdminSchema } from "@/lib/schemas/loginAdmin";
 type Errores = Partial<Record<"email" | "password", string>>;
 
 export function LoginClienteForm() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errores, setErrores] = useState<Errores>({});
   const [cargando, setCargando] = useState(false);
+  // Mismo criterio que LoginAdminForm: presencia (no null) = mostrar la card
+  // en vez del formulario. Llega por ?error=sin_acceso cuando el proxy
+  // revoca una sesión activa-pero-sin-acceso al entrar por URL directa (ver
+  // proxy.ts) — este portal no tiene Google, así que es el único disparador
+  // por query param (el otro es el submit de abajo, con email conocido).
+  const [accesoDenegado, setAccesoDenegado] = useState<{ email?: string } | null>(null);
+
+  useEffect(() => {
+    if (searchParams.get("error") !== "sin_acceso") return;
+    window.history.replaceState(null, "", window.location.pathname);
+    setAccesoDenegado({});
+  }, [searchParams]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -43,6 +58,11 @@ export function LoginClienteForm() {
       });
       const data = await resp.json();
       if (!resp.ok || !data.ok) {
+        if (data.codigo === "SIN_ACCESO") {
+          setAccesoDenegado({ email });
+          setCargando(false);
+          return;
+        }
         toast.error(data.mensaje ?? "No se pudo iniciar sesión.");
         setCargando(false);
         return;
@@ -55,6 +75,10 @@ export function LoginClienteForm() {
       toast.error("No se pudo conectar con el servidor.");
       setCargando(false);
     }
+  }
+
+  if (accesoDenegado) {
+    return <AccesoNoAutorizado email={accesoDenegado.email} onReintentar={() => setAccesoDenegado(null)} />;
   }
 
   return (
