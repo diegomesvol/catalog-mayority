@@ -43,11 +43,6 @@ export default async function PaginaAdminDashboard() {
         ) : (
           <EsqueletoDashboard />
         )}
-        <p className="mt-6 text-center text-xs text-ink-500">
-          <Link href="/" className="underline-offset-2 hover:underline">
-            Ver catálogo público
-          </Link>
-        </p>
       </main>
     </AdminHeader>
   );
