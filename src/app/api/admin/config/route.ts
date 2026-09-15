@@ -42,6 +42,11 @@ export async function POST(request: NextRequest) {
       descripcionEmpresa: parsed.data.descripcionEmpresa || null,
       rif: parsed.data.rif || null,
       fondoLoginUrl: parsed.data.fondoLoginUrl || null,
+      logoUrl: parsed.data.logoUrl || null,
+      logoVisible: parsed.data.logoVisible,
+      // razonSocial es obligatoria — el schema ya rechazó un valor vacío
+      // (superRefine), así que acá siempre llega con contenido.
+      razonSocial: parsed.data.razonSocial,
     };
 
     await guardarConfigSitio(config);

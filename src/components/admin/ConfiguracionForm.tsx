@@ -9,14 +9,25 @@ import type { ConfigSitio } from "@/lib/types";
 import {
   DESCRIPCION_EMPRESA_MAX,
   FONDO_LOGIN_URL_MAX,
+  LOGO_URL_MAX,
+  RAZON_SOCIAL_MAX,
   RIF_MAX,
   WHATSAPP_VENTAS_MAX,
   validarConfigSitio,
   type ErroresConfigSitio,
 } from "@/lib/validarConfigSitio";
 
-const VACIA: ConfigSitio = { whatsappVentas: null, descripcionEmpresa: null, rif: null, fondoLoginUrl: null };
+const VACIA: ConfigSitio = {
+  whatsappVentas: null,
+  descripcionEmpresa: null,
+  rif: null,
+  fondoLoginUrl: null,
+  logoUrl: null,
+  logoVisible: true,
+  razonSocial: "",
+};
 const TIPOS_IMAGEN_FONDO = "image/png,image/jpeg,image/webp";
+const TIPOS_IMAGEN_LOGO = "image/png,image/svg+xml,image/webp";
 
 // Datos operativos que antes solo se podían cambiar desde Vercel (variable
 // de entorno) o estaban fijos en el código (Footer.tsx) — Propuesta 10.
@@ -35,6 +46,7 @@ export function ConfiguracionForm() {
   const [cargandoInicial, setCargandoInicial] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [subiendoFondo, setSubiendoFondo] = useState(false);
+  const [subiendoLogo, setSubiendoLogo] = useState(false);
 
   useEffect(() => {
     let cancelado = false;
@@ -76,6 +88,12 @@ export function ConfiguracionForm() {
     if (errores[clave as keyof ErroresConfigSitio]) setErrores({ ...errores, [clave]: undefined });
   }
 
+  // Aparte de campo(): logoVisible es boolean, no texto — no hay validación
+  // de campo asociada (nunca produce un error de formulario).
+  function toggleLogoVisible() {
+    setBorrador({ ...borrador, logoVisible: !borrador.logoVisible });
+  }
+
   // La imagen se sube ENSEGUIDA (no tiene sentido "borrador" para un
   // archivo) — lo que queda pendiente de "Guardar cambios" es solo la URL
   // resultante, igual que si el admin la hubiera pegado a mano en el campo
@@ -103,12 +121,39 @@ export function ConfiguracionForm() {
     }
   }
 
+  // Igual que subirFondo: se sube enseguida, lo pendiente de "Guardar
+  // cambios" es solo la URL resultante en el campo logoUrl.
+  async function subirLogo(archivo: File) {
+    setSubiendoLogo(true);
+    try {
+      const formData = new FormData();
+      formData.append("archivo", archivo);
+      const { resp, data } = await fetchJson<{ ok: boolean; url?: string; mensaje?: string }>("/api/admin/config/logo", {
+        method: "POST",
+        body: formData,
+      });
+      if (!resp.ok || !data || !data.ok || !data.url) {
+        toast.error(data?.mensaje ?? "No se pudo subir el logo.");
+        return;
+      }
+      campo("logoUrl", data.url);
+      toast.success("Logo subido — no te olvides de \"Guardar cambios\".");
+    } catch (err) {
+      logError("ConfiguracionForm.subirLogo", err, "No se pudo conectar con el servidor para subir el logo.");
+      toast.error("No se pudo conectar con el servidor.");
+    } finally {
+      setSubiendoLogo(false);
+    }
+  }
+
   async function guardar() {
     const campos = {
       whatsappVentas: (borrador.whatsappVentas ?? "").trim(),
       descripcionEmpresa: (borrador.descripcionEmpresa ?? "").trim(),
       rif: (borrador.rif ?? "").trim(),
       fondoLoginUrl: (borrador.fondoLoginUrl ?? "").trim(),
+      logoUrl: (borrador.logoUrl ?? "").trim(),
+      razonSocial: (borrador.razonSocial ?? "").trim(),
     };
 
     const erroresActuales = validarConfigSitio(campos);
@@ -127,7 +172,9 @@ export function ConfiguracionForm() {
       const { resp, data } = await fetchJson<{ ok: boolean; config?: ConfigSitio; mensaje?: string }>("/api/admin/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(campos),
+        // logoVisible no pasa por validarConfigSitio (es boolean, no texto) —
+        // se manda tal cual desde el borrador.
+        body: JSON.stringify({ ...campos, logoVisible: borrador.logoVisible }),
       });
       if (!resp.ok || !data || !data.ok || !data.config) {
         // Esto solo debería pasar por algo que el form no pudo anticipar
@@ -180,6 +227,20 @@ export function ConfiguracionForm() {
         // ni ambigüedad sobre si esto es un formulario en blanco o valores
         // ya guardados.
         <div className="mt-4 flex flex-col gap-3">
+          <FilaLectura etiqueta="Razón social" valor={guardado.razonSocial} placeholder="—" />
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs font-medium text-ink-500">Logo de marca</span>
+            {guardado.logoUrl ? (
+              <div className="mt-1 flex items-center gap-2">
+                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-ink-200 bg-paper p-1">
+                  <ImagenProducto src={guardado.logoUrl} alt="Logo de marca" className="h-full w-full" ajuste="cubrir" sizes="56px" />
+                </div>
+                <span className="text-xs text-ink-500">{guardado.logoVisible ? "Visible en login y footer" : "Oculto (archivo conservado)"}</span>
+              </div>
+            ) : (
+              <span className="text-sm italic text-ink-500">Sin configurar — no se muestra ningún logo</span>
+            )}
+          </div>
           <FilaLectura etiqueta="WhatsApp de ventas" valor={guardado.whatsappVentas} placeholder="Sin configurar — usa el número de Vercel" />
           <FilaLectura etiqueta="Descripción de la empresa" valor={guardado.descripcionEmpresa} placeholder="Sin configurar — usa el texto por defecto" />
           <FilaLectura etiqueta="RIF" valor={guardado.rif} placeholder="Sin configurar — usa el RIF por defecto" />
@@ -196,6 +257,91 @@ export function ConfiguracionForm() {
         </div>
       ) : (
         <div className="mt-4 flex flex-col gap-4">
+          <Campo
+            id="config-razonSocial"
+            etiqueta="Razón social"
+            ayuda="Nombre legal de la empresa — aparece en el copyright del pie de página y en cualquier otro lugar que hoy dice “Calzados Mesvol, C.A.” fijo."
+            value={borrador.razonSocial ?? ""}
+            onChange={(v) => campo("razonSocial", v)}
+            maxLength={RAZON_SOCIAL_MAX}
+            error={errores.razonSocial}
+          />
+
+          <div>
+            <div className="mb-1 flex items-baseline justify-between gap-2">
+              <span className="text-xs font-medium text-ink-900">Logo de marca</span>
+              <span className={`text-[11px] tabular-nums ${(borrador.logoUrl ?? "").length >= LOGO_URL_MAX ? "text-danger-600" : "text-ink-500"}`}>
+                {(borrador.logoUrl ?? "").length}/{LOGO_URL_MAX}
+              </span>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-ink-200 bg-paper p-1">
+                <ImagenProducto src={borrador.logoUrl ?? undefined} alt="" className="h-full w-full" sizes="64px" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <input
+                  id="config-logoUrl"
+                  type="url"
+                  placeholder="https://…"
+                  value={borrador.logoUrl ?? ""}
+                  onChange={(e) => campo("logoUrl", e.target.value)}
+                  maxLength={LOGO_URL_MAX}
+                  aria-invalid={Boolean(errores.logoUrl)}
+                  aria-describedby={errores.logoUrl ? "config-logoUrl-error" : "config-logoUrl-ayuda"}
+                  className={`w-full rounded-lg border bg-paper px-3 py-2 text-sm text-ink-900 focus:border-accent-600 ${
+                    errores.logoUrl ? "border-danger-600" : "border-ink-200"
+                  }`}
+                />
+                <input
+                  type="file"
+                  accept={TIPOS_IMAGEN_LOGO}
+                  disabled={subiendoLogo}
+                  onChange={(e) => {
+                    const archivo = e.target.files?.[0];
+                    if (archivo) subirLogo(archivo);
+                    e.target.value = "";
+                  }}
+                  className="mt-2 block w-full text-xs text-ink-700 file:mr-2 file:rounded-full file:border-0 file:bg-ink-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink-900 hover:file:bg-ink-200"
+                />
+              </div>
+            </div>
+            {errores.logoUrl ? (
+              <p id="config-logoUrl-error" className="mt-1 text-xs text-danger-600">
+                {errores.logoUrl}
+              </p>
+            ) : (
+              <p id="config-logoUrl-ayuda" className="mt-1 text-[11px] text-ink-500">
+                {subiendoLogo
+                  ? "Subiendo…"
+                  : "Recomendado: PNG o SVG con fondo transparente, relación 1:1 o formato horizontal 200×50px, máx. 2MB."}
+              </p>
+            )}
+
+            <label className="mt-3 flex items-center gap-2.5">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={borrador.logoVisible}
+                onClick={toggleLogoVisible}
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 ${
+                  borrador.logoVisible ? "bg-ink-900" : "bg-ink-200"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    borrador.logoVisible ? "translate-x-[22px]" : "translate-x-0.5"
+                  }`}
+                />
+              </button>
+              <span className="text-sm text-ink-900">
+                {borrador.logoVisible ? "Logo visible" : "Logo oculto"}
+                <span className="ml-1.5 text-xs text-ink-500">
+                  {borrador.logoVisible ? "— se muestra en login y footer" : "— archivo conservado, no se renderiza"}
+                </span>
+              </span>
+            </label>
+          </div>
+
           <Campo
             id="config-whatsappVentas"
             etiqueta="WhatsApp de ventas"

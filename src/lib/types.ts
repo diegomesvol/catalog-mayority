@@ -166,4 +166,17 @@ export interface ConfigSitio {
   // como "/api/imagenes/login/…", ver subirImagenFondoLogin en blob.ts) o
   // pegado directo como URL externa. null = usa el degradé por defecto.
   fondoLoginUrl: string | null;
+  // Logo de marca — mismo bucket público que fondoLoginUrl (ver
+  // subirImagenLogoMarca en blob.ts). Se muestra en los logins (admin +
+  // cliente) y, si logoVisible, en el footer del catálogo público. null =
+  // no se muestra ningún logo (independiente de logoVisible).
+  logoUrl: string | null;
+  // Toggle aparte de logoUrl: permite ocultar el logo sin borrar el archivo
+  // ya subido — vuelve a mostrarse apenas se reactiva, sin tener que
+  // resubirlo. true por defecto (columna logo_visible not null default true).
+  logoVisible: boolean;
+  // Razón social — obligatoria (a diferencia del resto de ConfigSitio):
+  // alimenta el copyright del footer ("© {año} {razonSocial}") y cualquier
+  // otro lugar que hoy tiene "Calzados Mesvol, C.A." fijo en el código.
+  razonSocial: string;
 }

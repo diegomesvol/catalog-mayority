@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // ?error=sin_acceso (ver proxy.ts) vía useSearchParams, así que necesita el
 // mismo boundary de Suspense que el de admin.
 export default async function PaginaLoginCliente() {
-  const { fondoLoginUrl } = await leerConfigSitio();
+  const { fondoLoginUrl, logoUrl, logoVisible, razonSocial } = await leerConfigSitio();
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-ink-900 px-4 py-10 lg:justify-end lg:px-16">
@@ -22,9 +22,20 @@ export default async function PaginaLoginCliente() {
         <div className="absolute inset-0 bg-gradient-to-br from-ink-900/80 via-ink-900/45 to-ink-900/75" />
       </div>
 
-      <Suspense fallback={null}>
-        <LoginClienteForm />
-      </Suspense>
+      <div className="relative flex w-full max-w-sm flex-col items-center lg:items-end">
+        {logoVisible && logoUrl && (
+          // Mismo tratamiento que /admin/login/page.tsx — ver la nota ahí.
+          // eslint-disable-next-line @next/next/no-img-element -- URL de Supabase Storage o externa, mismo motivo que fondoLoginUrl arriba
+          <img
+            src={logoUrl}
+            alt={razonSocial}
+            className="mb-6 h-14 w-auto max-w-[200px] rounded-2xl bg-white/10 p-2.5 object-contain shadow-lg backdrop-blur-sm sm:h-16"
+          />
+        )}
+        <Suspense fallback={null}>
+          <LoginClienteForm />
+        </Suspense>
+      </div>
     </main>
   );
 }

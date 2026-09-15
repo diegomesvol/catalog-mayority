@@ -534,6 +534,10 @@ export async function subirImagenFondoLogin(nombre: string, bytes: ArrayBuffer, 
   return subirImagenPublica("login", nombre, bytes, contentType);
 }
 
+export async function subirImagenLogoMarca(nombre: string, bytes: ArrayBuffer, contentType: string): Promise<string> {
+  return subirImagenPublica("logo-marca", nombre, bytes, contentType);
+}
+
 /** Config actual de la guía de tallas (instrucciones + tabla). Nunca falta: si no se configuró aún, ambos campos vienen en null. */
 export const leerGuiaTallas = cache(async (): Promise<GuiaTallas> => {
   const supabase = await crearClienteServidor();
@@ -587,7 +591,15 @@ export async function guardarColecciones(colecciones: Coleccion[]): Promise<void
 // desde Vercel (variable de entorno) o estaban fijos en el código. Todos
 // los campos son opcionales — si no están configurados acá, cada lugar que
 // los usa cae a su valor por defecto (ver CONFIG_SITIO_VACIA).
-export const CONFIG_SITIO_VACIA: ConfigSitio = { whatsappVentas: null, descripcionEmpresa: null, rif: null, fondoLoginUrl: null };
+export const CONFIG_SITIO_VACIA: ConfigSitio = {
+  whatsappVentas: null,
+  descripcionEmpresa: null,
+  rif: null,
+  fondoLoginUrl: null,
+  logoUrl: null,
+  logoVisible: true,
+  razonSocial: "Calzados Mesvol, C.A.",
+};
 
 // cache() — layout.tsx, page.tsx y producto/[id]/page.tsx llaman esto cada
 // uno por su cuenta dentro de la misma request (config del footer). Sin
@@ -596,7 +608,7 @@ export const leerConfigSitio = cache(async (): Promise<ConfigSitio> => {
   const supabase = await crearClienteServidor();
   const { data, error } = await supabase
     .from("config_sitio")
-    .select("whatsapp_ventas, descripcion_empresa, rif, fondo_login_url")
+    .select("whatsapp_ventas, descripcion_empresa, rif, fondo_login_url, logo_url, logo_visible, razon_social")
     .eq("id", true)
     .maybeSingle();
   if (error) {
@@ -609,6 +621,9 @@ export const leerConfigSitio = cache(async (): Promise<ConfigSitio> => {
     descripcionEmpresa: data.descripcion_empresa as string | null,
     rif: data.rif as string | null,
     fondoLoginUrl: data.fondo_login_url as string | null,
+    logoUrl: data.logo_url as string | null,
+    logoVisible: data.logo_visible as boolean,
+    razonSocial: (data.razon_social as string) || CONFIG_SITIO_VACIA.razonSocial,
   };
 });
 
@@ -623,6 +638,9 @@ export async function guardarConfigSitio(config: ConfigSitio): Promise<void> {
         descripcion_empresa: config.descripcionEmpresa,
         rif: config.rif,
         fondo_login_url: config.fondoLoginUrl,
+        logo_url: config.logoUrl,
+        logo_visible: config.logoVisible,
+        razon_social: config.razonSocial,
         actualizado_en: new Date().toISOString(),
       },
       { onConflict: "id" },

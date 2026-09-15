@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 // (?error=… del callback de OAuth) — mismo motivo que BusquedaProvider en
 // el layout raíz.
 export default async function PaginaLoginAdmin() {
-  const { fondoLoginUrl } = await leerConfigSitio();
+  const { fondoLoginUrl, logoUrl, logoVisible, razonSocial } = await leerConfigSitio();
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-ink-900 px-4 py-10 lg:justify-end lg:px-16">
@@ -34,9 +34,25 @@ export default async function PaginaLoginAdmin() {
             suba el admin. */}
       </div>
 
-      <Suspense fallback={null}>
-        <LoginAdminForm />
-      </Suspense>
+      <div className="relative flex w-full max-w-sm flex-col items-center lg:items-end">
+        {logoVisible && logoUrl && (
+          // Halo translúcido detrás del logo: garantiza contraste sin
+          // importar qué tan clara/oscura sea la foto de fondo que suba el
+          // admin (mismo problema de contraste que el degradé de arriba
+          // resuelve para el texto) — alineación óptica centrada sobre la
+          // card, separación (mb-6) consistente con la jerarquía "marca
+          // primero, luego el formulario".
+          // eslint-disable-next-line @next/next/no-img-element -- URL de Supabase Storage o externa, mismo motivo que fondoLoginUrl arriba
+          <img
+            src={logoUrl}
+            alt={razonSocial}
+            className="mb-6 h-14 w-auto max-w-[200px] rounded-2xl bg-white/10 p-2.5 object-contain shadow-lg backdrop-blur-sm sm:h-16"
+          />
+        )}
+        <Suspense fallback={null}>
+          <LoginAdminForm />
+        </Suspense>
+      </div>
     </main>
   );
 }

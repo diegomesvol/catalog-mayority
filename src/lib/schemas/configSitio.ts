@@ -12,12 +12,20 @@ import { validarConfigSitio, type CamposConfigSitio } from "@/lib/validarConfigS
 // error de validación.
 const campoTexto = z.unknown().transform((valor) => (typeof valor === "string" ? valor.trim() : ""));
 
+// logoVisible: boolean "libre" en el mismo sentido que campoTexto — lo que
+// no venga como boolean (falta el campo, o el cliente mandó otra cosa) se
+// trata como true (el default de la columna logo_visible), no como error.
+const campoBooleano = z.unknown().transform((valor) => (typeof valor === "boolean" ? valor : true));
+
 export const configSitioSchema = z
   .object({
     whatsappVentas: campoTexto,
     descripcionEmpresa: campoTexto,
     rif: campoTexto,
     fondoLoginUrl: campoTexto,
+    logoUrl: campoTexto,
+    logoVisible: campoBooleano,
+    razonSocial: campoTexto,
   })
   .superRefine((campos: CamposConfigSitio, ctx) => {
     const errores = validarConfigSitio(campos);
