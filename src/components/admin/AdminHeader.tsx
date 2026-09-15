@@ -32,6 +32,7 @@ export function AdminHeader({ children }: { children: ReactNode }) {
   const [saliendo, setSaliendo] = useState(false);
   const [perfil, setPerfil] = useState<PerfilAdmin | null>(null);
   const [tituloPlataforma, setTituloPlataforma] = useState<string | null>(null);
+  const [cargandoTitulo, setCargandoTitulo] = useState(true);
 
   // Solo para el badge de "modo demostración" — el bloqueo real ya lo hace
   // el servidor en cada ruta de escritura (requierePermisoEscritura); esto
@@ -48,9 +49,11 @@ export function AdminHeader({ children }: { children: ReactNode }) {
   // a leerConfigSitio(); /api/admin/config GET no requiere sesión de
   // escritura, solo lectura pública de la config.
   useEffect(() => {
-    fetchJson<{ ok: boolean; config?: ConfigSitio }>("/api/admin/config").then(({ data }) => {
-      if (data?.ok && data.config) setTituloPlataforma(data.config.tituloPlataforma);
-    });
+    fetchJson<{ ok: boolean; config?: ConfigSitio }>("/api/admin/config")
+      .then(({ data }) => {
+        if (data?.ok && data.config) setTituloPlataforma(data.config.tituloPlataforma);
+      })
+      .finally(() => setCargandoTitulo(false));
   }, []);
 
   async function salir() {
@@ -70,7 +73,7 @@ export function AdminHeader({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex flex-1">
-      <AdminNav rol={perfil?.rol ?? null} tituloPlataforma={titulo} />
+      <AdminNav rol={perfil?.rol ?? null} />
 
       {/* "min-w-0": sin esto un hijo ancho (ej. una tabla en /admin/catalogo)
           empujaría toda la columna — y con ella el sidebar — más ancha que
@@ -96,10 +99,21 @@ export function AdminHeader({ children }: { children: ReactNode }) {
                   encabezado desde "lg" — a pedido, ahora el título dinámico
                   de la plataforma (ver ConfiguracionForm) se ve siempre acá,
                   en cualquier tamaño de pantalla, aunque quede repetido con
-                  el nombre fijo del sidebar. */}
-              <span className="truncate text-base font-semibold tracking-tight text-ink-900">
-                {titulo}
-              </span>
+                  el nombre fijo del sidebar. Mientras se resuelve el fetch a
+                  /api/admin/config, un skeleton en vez del título — así no
+                  parpadea de "Catálogo Mayorista" (el fallback) al valor real
+                  apenas llega la respuesta; si la respuesta llega vacía, ahí
+                  sí se queda con el fallback. */}
+              {cargandoTitulo ? (
+                <span
+                  aria-hidden="true"
+                  className="h-5 w-32 animate-pulse rounded bg-ink-100"
+                />
+              ) : (
+                <span className="truncate text-base font-semibold tracking-tight text-ink-900">
+                  {titulo}
+                </span>
+              )}
               {perfil?.solo_lectura && (
                 <span className="shrink-0 rounded-full border border-warning-600/30 bg-warning-100 px-2.5 py-0.5 text-xs font-medium text-warning-600">
                   Modo demostración
