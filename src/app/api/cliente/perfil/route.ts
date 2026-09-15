@@ -43,10 +43,10 @@ export async function PATCH(request: NextRequest) {
       estado_ubicacion: parsed.data.estadoUbicacion,
       metodos_pago: parsed.data.metodosPago,
     };
-    // logoUrl es el único campo realmente opcional en este PATCH (se sube
-    // aparte, ver api/cliente/perfil/logo) — solo se toca si vino en el body,
-    // así un guardado del resto del formulario nunca pisa el logo ya subido.
-    if (parsed.data.logoUrl !== undefined) cambios.logo_url = parsed.data.logoUrl;
+    // logo_url NO se acepta acá: solo lo escribe api/cliente/perfil/logo con
+    // la URL real del Storage. Antes este PATCH aceptaba cualquier string
+    // (URL externa arbitraria guardada como logo del cliente) y el
+    // formulario ni siquiera lo usaba.
 
     const { error } = await supabase.from("clientes").update(cambios).eq("user_id", user.id);
     if (error) {

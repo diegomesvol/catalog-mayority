@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { crearClienteServidor } from "@/lib/supabase";
+import { crearClienteServicio, crearClienteServidor } from "@/lib/supabase";
 import { requiereClienteActivo } from "@/lib/clienteAuth";
 import { crearPedidoSchema } from "@/lib/schemas/pedido";
+import { leerCatalogoPublico } from "@/lib/blob";
+import { recalcularPedido } from "@/lib/pedidoServidor";
 import { logError } from "@/lib/logger";
 
 // Historial de pedidos del cliente logueado. RLS (propio_pedido_select) ya
@@ -43,13 +45,27 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ ok: false, mensaje: "No autenticado." }, { status: 401 });
 
-    const { data, error } = await supabase
+    // Precios/total NUNCA del body: se recalculan contra el catálogo vigente.
+    const catalogo = await leerCatalogoPublico();
+    if (!catalogo) {
+      return NextResponse.json({ ok: false, mensaje: "No hay catálogo publicado." }, { status: 409 });
+    }
+    const recalculo = recalcularPedido(catalogo, parsed.data.items);
+    if (!recalculo.ok) {
+      return NextResponse.json({ ok: false, mensaje: recalculo.mensaje }, { status: 409 });
+    }
+
+    // Rol de servicio: la policy propio_pedido_insert se elimina (ver
+    // migración 20260916000000_hardening_seguridad.sql) para que nadie
+    // inserte pedidos directo por PostgREST. cliente_id sale de la sesión
+    // ya validada arriba, nunca del body.
+    const { data, error } = await crearClienteServicio()
       .from("pedidos")
       .insert({
         cliente_id: user.id,
-        items: parsed.data.items,
+        items: recalculo.items,
         comprador: parsed.data.comprador,
-        total: parsed.data.total,
+        total: recalculo.total,
       })
       .select()
       .single();
