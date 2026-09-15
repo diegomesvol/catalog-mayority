@@ -344,13 +344,13 @@ export function ConfiguracionForm() {
               className="mt-3 flex items-center gap-2.5 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2"
             >
               <span
-                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                className={`relative inline-block h-6 w-11 shrink-0 overflow-hidden rounded-full transition-colors ${
                   borrador.logoVisible ? "bg-ink-900" : "bg-ink-200"
                 }`}
               >
                 <span
-                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                    borrador.logoVisible ? "translate-x-[22px]" : "translate-x-0.5"
+                  className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    borrador.logoVisible ? "translate-x-[20px]" : "translate-x-0"
                   }`}
                 />
               </span>
