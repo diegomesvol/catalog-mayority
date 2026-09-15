@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { leerCatalogoPublico, leerColecciones } from "@/lib/blob";
+import { leerCatalogoPublico, leerColecciones, leerConfigSitio, leerLogosFooter } from "@/lib/blob";
 import { colorPorDefecto } from "@/lib/producto";
 import { logError } from "@/lib/logger";
-import { LOGOS_FOOTER } from "@/lib/logosFooter";
 
 // Manifiesto para la "descarga offline" (ver DescargaOffline.tsx) — POR
 // MARCA, no el catálogo entero: con ~1600+ variantes, bajar todo de una vez
@@ -57,7 +56,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ok: false, mensaje: `No hay productos de "${marca}" en el catálogo vigente.` }, { status: 404 });
     }
 
-    const colecciones = await leerColecciones();
+    const [colecciones, config, logosFooter] = await Promise.all([leerColecciones(), leerConfigSitio(), leerLogosFooter()]);
 
     // "/?marca=X" es la grilla de esa marca (Filtros.tsx ya sabe leer ese
     // query param) — el fallback del service worker cae acá cuando el
@@ -83,11 +82,21 @@ export async function GET(request: NextRequest) {
       if (coleccion.imagenUrl) imagenes.add(coleccion.imagenUrl);
     }
 
-    // Logos de marca del Footer (ver Footer.tsx y esLogoDeMarca en sw.js):
-    // se muestran en TODAS las páginas, así que van en cualquier descarga
-    // sin condicionarlos a la marca — sin esto quedaban rotos offline.
-    for (const logo of LOGOS_FOOTER) {
-      imagenes.add(logo.src);
+    // Logos de marca del Footer (ver Footer.tsx y esAssetDeStoragePublico en
+    // sw.js) — ahora administrados desde /admin/configuracion, URLs de
+    // Supabase Storage en vez del viejo array estático de public/marcas. Se
+    // muestran en TODAS las páginas, así que van en cualquier descarga sin
+    // condicionarlos a la marca; solo los que el admin dejó visibles, igual
+    // que Footer.tsx. Sin esto quedaban rotos offline.
+    for (const logo of logosFooter) {
+      if (logo.visible && logo.imagenUrl) imagenes.add(logo.imagenUrl);
+    }
+
+    // Logo principal de la empresa (login + footer, ver ConfiguracionForm y
+    // Footer.tsx) — mismo motivo: si está visible y cargado, tiene que
+    // sobrevivir offline igual que los logos de marca.
+    if (config.logoVisible && config.logoUrl) {
+      imagenes.add(config.logoUrl);
     }
 
     return NextResponse.json({

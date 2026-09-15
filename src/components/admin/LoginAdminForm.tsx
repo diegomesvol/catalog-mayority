@@ -28,7 +28,14 @@ const MENSAJES_ERROR_OAUTH: Record<string, string> = {
 // que no puede llamarse desde "use client") y porque este formulario
 // necesita useSearchParams (?error=…), que en Next requiere un boundary de
 // Suspense — ver ese "wrap" en page.tsx.
-export function LoginAdminForm() {
+interface Props {
+  // null tanto si no hay logo configurado como si logoVisible está apagado
+  // (ver page.tsx) — un solo chequeo acá (!logoUrl) cubre los dos casos.
+  logoUrl: string | null;
+  razonSocial: string;
+}
+
+export function LoginAdminForm({ logoUrl, razonSocial }: Props) {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -137,8 +144,22 @@ export function LoginAdminForm() {
 
   return (
     <div className="w-full max-w-sm rounded-2xl border border-white/40 bg-paper-raised/90 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
-      <h1 className="text-lg font-semibold text-ink-900">Panel de administración</h1>
-      <p className="mt-1 text-sm text-ink-500">Ingresá con tu cuenta de administrador.</p>
+      {/* Logo sin fondo propio (solo el isotipo) a la izquierda de
+          título+subtítulo — alineación óptica: shrink-0 para que nunca lo
+          aplaste el texto, y self-start (no center) porque un logo con
+          texto interno de dos líneas (ej. "CALZADOS" + "MESVOL") pesa más
+          arriba, así que alinearlo con la línea base del título en vez del
+          centro del bloque completo se ve más prolijo. */}
+      <div className="flex items-start gap-3">
+        {logoUrl && (
+          // eslint-disable-next-line @next/next/no-img-element -- URL de Supabase Storage o externa (misma razón que fondoLoginUrl en page.tsx)
+          <img src={logoUrl} alt={razonSocial} className="h-11 w-11 shrink-0 object-contain sm:h-12 sm:w-12" />
+        )}
+        <div className="min-w-0">
+          <h1 className="text-lg font-semibold text-ink-900">Panel de administración</h1>
+          <p className="mt-1 text-sm text-ink-500">Ingresá con tu cuenta de administrador.</p>
+        </div>
+      </div>
 
       <button
         type="button"
@@ -152,7 +173,7 @@ export function LoginAdminForm() {
 
       <div className="my-5 flex items-center gap-3" aria-hidden="true">
         <div className="h-px flex-1 bg-ink-200" />
-        <span className="text-xs font-medium text-ink-500">o con tu clave</span>
+        <span className="text-xs font-medium text-ink-500">o con credenciales</span>
         <div className="h-px flex-1 bg-ink-200" />
       </div>
 

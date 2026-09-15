@@ -95,6 +95,20 @@ export interface Coleccion {
   filtro: FiltroColeccion;
 }
 
+// Logos de marca del bloque "Nuestras marcas" del footer (ver
+// lib/blob.ts: leerLogosFooter/guardarLogosFooter y
+// components/admin/LogosFooterConfig.tsx). 1 a 4 — el límite se valida en
+// la app (schemas/logosFooter.ts), no en la base. "visible" oculta el logo
+// sin borrar el archivo, igual que ConfigSitio.logoVisible. El orden es la
+// posición en la lista (igual que Coleccion, sin campo aparte del lado del
+// cliente).
+export interface LogoFooter {
+  id: string;
+  nombre: string;
+  imagenUrl: string | null;
+  visible: boolean;
+}
+
 export interface Catalogo {
   productos: Producto[];
   generadoEn: string; // ISO 8601
@@ -168,8 +182,9 @@ export interface ConfigSitio {
   fondoLoginUrl: string | null;
   // Logo de marca — mismo bucket público que fondoLoginUrl (ver
   // subirImagenLogoMarca en blob.ts). Se muestra en los logins (admin +
-  // cliente) y, si logoVisible, en el footer del catálogo público. null =
-  // no se muestra ningún logo (independiente de logoVisible).
+  // cliente) y, si logoVisible, en el header del catálogo público (antes
+  // era el footer — ver Header.tsx/Footer.tsx). null = no se muestra
+  // ningún logo (independiente de logoVisible).
   logoUrl: string | null;
   // Toggle aparte de logoUrl: permite ocultar el logo sin borrar el archivo
   // ya subido — vuelve a mostrarse apenas se reactiva, sin tener que
@@ -179,4 +194,8 @@ export interface ConfigSitio {
   // alimenta el copyright del footer ("© {año} {razonSocial}") y cualquier
   // otro lugar que hoy tiene "Calzados Mesvol, C.A." fijo en el código.
   razonSocial: string;
+  // Título de la plataforma — se muestra en el header del catálogo público
+  // (al lado del logo, reemplazando el texto fijo "Catálogo Mayorista") y
+  // en la barra superior del panel admin. null = usa ese texto por defecto.
+  tituloPlataforma: string | null;
 }

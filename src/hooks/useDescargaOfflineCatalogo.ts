@@ -35,7 +35,11 @@ import { logError } from "@/lib/logger";
 //  4) a medida que llega el HTML de cada página, la revisa por referencias a
 //     OTROS assets de /_next/static/* (el chunk propio de un client
 //     component del catálogo, por ejemplo) y los agrega a la cola.
-const CACHE_VERSION = "v2";
+// v3: sincronizado con public/sw.js — el service worker ahora también
+// intercepta assets cross-origin de Supabase Storage (logo principal y
+// logos de "Nuestras marcas", ver esAssetDeStoragePublico en sw.js), así
+// que la versión sube en los dos archivos juntos.
+const CACHE_VERSION = "v3";
 const CACHE_PAGINAS = `catalogo-paginas-${CACHE_VERSION}`;
 const CACHE_ASSETS = `catalogo-assets-${CACHE_VERSION}`;
 const CACHE_IMAGENES = `catalogo-imagenes-${CACHE_VERSION}`;

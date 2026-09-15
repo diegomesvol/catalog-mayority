@@ -1,4 +1,4 @@
-import { leerCatalogoPublico, leerColecciones, leerConfigSitio } from "@/lib/blob";
+import { leerCatalogoPublico, leerColecciones, leerConfigSitio, leerLogosFooter } from "@/lib/blob";
 import { Header } from "@/components/ui/Header";
 import { Footer } from "@/components/ui/Footer";
 import { CatalogoClient } from "@/components/catalogo/CatalogoClient";
@@ -14,10 +14,11 @@ interface Props {
 }
 
 export default async function PaginaCatalogo({ searchParams }: Props) {
-  const [catalogo, config, colecciones, sp] = await Promise.all([
+  const [catalogo, config, colecciones, logosFooter, sp] = await Promise.all([
     leerCatalogoPublico(),
     leerConfigSitio(),
     leerColecciones(),
+    leerLogosFooter(),
     searchParams,
   ]);
 
@@ -48,7 +49,7 @@ export default async function PaginaCatalogo({ searchParams }: Props) {
           <CatalogoClient productos={catalogo.productos} />
         )}
       </main>
-      <Footer config={config} />
+      <Footer config={config} logosFooter={logosFooter} />
     </>
   );
 }

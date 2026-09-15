@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
       // razonSocial es obligatoria — el schema ya rechazó un valor vacío
       // (superRefine), así que acá siempre llega con contenido.
       razonSocial: parsed.data.razonSocial,
+      tituloPlataforma: parsed.data.tituloPlataforma || null,
     };
 
     await guardarConfigSitio(config);

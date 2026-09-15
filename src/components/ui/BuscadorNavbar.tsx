@@ -61,7 +61,7 @@ export function BuscadorNavbar() {
       <label htmlFor={id} className="sr-only">
         Buscar por modelo, marca, color o código SAP
       </label>
-      <div className="relative">
+      <div className="relative min-w-0">
         <button
           type="submit"
           aria-label="Buscar en el catálogo"
@@ -83,7 +83,16 @@ export function BuscadorNavbar() {
           // pasando a ink-900, más el texto en negrita — un contraste
           // sutil pero claro, con transición fluida, en vez de repintar
           // toda la barra al escribir.
-          className={`w-full rounded-full border bg-paper-raised py-1.5 pl-8 pr-3 text-sm text-ink-900 placeholder:text-ink-500 transition-colors duration-200 focus:border-accent-600 ${
+          //
+          // min-w-0: un <input> tiene un ancho mínimo intrínseco propio (el
+          // navegador lo calcula aparte de w-full) que puede superar el
+          // ancho real de su celda del grid (Header) cuando esa celda se
+          // achica — ej. al aparecer el botón de cancelar de
+          // DescargaOffline o el de login, la columna derecha "auto" crece
+          // y empuja a esta celda "minmax(0,1fr)" a un ancho chico. Sin
+          // min-w-0 el input ignora esa celda y se desborda por encima de
+          // los botones de al lado en vez de encogerse con ella.
+          className={`w-full min-w-0 rounded-full border bg-paper-raised py-1.5 pl-8 pr-3 text-sm text-ink-900 placeholder:text-ink-500 transition-colors duration-200 focus:border-accent-600 ${
             valor ? "border-ink-900 font-medium" : "border-ink-200"
           }`}
         />

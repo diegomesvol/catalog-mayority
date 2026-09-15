@@ -6,9 +6,12 @@ import { toast } from "sonner";
 import { logError } from "@/lib/logger";
 import { fetchJson } from "@/lib/apiCliente";
 import type { PerfilAdmin } from "@/lib/auth";
+import type { ConfigSitio } from "@/lib/types";
 import { AdminNav } from "./AdminNav";
 import { AvisoModoDemo } from "./AvisoModoDemo";
 import { MenuMovilAdmin } from "./MenuMovilAdmin";
+
+const TITULO_DEFECTO = "Catálogo Mayorista";
 
 // Shell completo del panel: sidebar de escritorio (AdminNav) + barra
 // superior + el <main> de cada página, que ahora llega como "children" en
@@ -28,6 +31,7 @@ export function AdminHeader({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [saliendo, setSaliendo] = useState(false);
   const [perfil, setPerfil] = useState<PerfilAdmin | null>(null);
+  const [tituloPlataforma, setTituloPlataforma] = useState<string | null>(null);
 
   // Solo para el badge de "modo demostración" — el bloqueo real ya lo hace
   // el servidor en cada ruta de escritura (requierePermisoEscritura); esto
@@ -35,6 +39,17 @@ export function AdminHeader({ children }: { children: ReactNode }) {
   useEffect(() => {
     fetchJson<{ ok: boolean; perfil?: PerfilAdmin }>("/api/admin/me").then(({ data }) => {
       if (data?.ok && data.perfil) setPerfil(data.perfil);
+    });
+  }, []);
+
+  // Mismo título dinámico que el header del catálogo público (ver Header.tsx
+  // y el campo "Título de la plataforma" en ConfiguracionForm) — acá se pide
+  // client-side porque AdminHeader es un Client Component sin acceso directo
+  // a leerConfigSitio(); /api/admin/config GET no requiere sesión de
+  // escritura, solo lectura pública de la config.
+  useEffect(() => {
+    fetchJson<{ ok: boolean; config?: ConfigSitio }>("/api/admin/config").then(({ data }) => {
+      if (data?.ok && data.config) setTituloPlataforma(data.config.tituloPlataforma);
     });
   }, []);
 
@@ -78,7 +93,9 @@ export function AdminHeader({ children }: { children: ReactNode }) {
                   desde "lg" — repetirlo acá también se sentía redundante, así
                   que en desktop esta barra queda sin título, solo con las
                   acciones (cerrar sesión) a la derecha. */}
-              <span className="truncate text-base font-semibold tracking-tight text-ink-900 lg:hidden">Panel</span>
+              <span className="truncate text-base font-semibold tracking-tight text-ink-900 lg:hidden">
+                {tituloPlataforma?.trim() || TITULO_DEFECTO}
+              </span>
               {perfil?.solo_lectura && (
                 <span className="shrink-0 rounded-full border border-warning-600/30 bg-warning-100 px-2.5 py-0.5 text-xs font-medium text-warning-600">
                   Modo demostración

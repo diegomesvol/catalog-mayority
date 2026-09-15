@@ -26,6 +26,7 @@ export const configSitioSchema = z
     logoUrl: campoTexto,
     logoVisible: campoBooleano,
     razonSocial: campoTexto,
+    tituloPlataforma: campoTexto,
   })
   .superRefine((campos: CamposConfigSitio, ctx) => {
     const errores = validarConfigSitio(campos);

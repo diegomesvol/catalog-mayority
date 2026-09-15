@@ -12,6 +12,7 @@ import {
   LOGO_URL_MAX,
   RAZON_SOCIAL_MAX,
   RIF_MAX,
+  TITULO_PLATAFORMA_MAX,
   WHATSAPP_VENTAS_MAX,
   validarConfigSitio,
   type ErroresConfigSitio,
@@ -25,6 +26,7 @@ const VACIA: ConfigSitio = {
   logoUrl: null,
   logoVisible: true,
   razonSocial: "",
+  tituloPlataforma: null,
 };
 const TIPOS_IMAGEN_FONDO = "image/png,image/jpeg,image/webp";
 const TIPOS_IMAGEN_LOGO = "image/png,image/svg+xml,image/webp";
@@ -154,6 +156,7 @@ export function ConfiguracionForm() {
       fondoLoginUrl: (borrador.fondoLoginUrl ?? "").trim(),
       logoUrl: (borrador.logoUrl ?? "").trim(),
       razonSocial: (borrador.razonSocial ?? "").trim(),
+      tituloPlataforma: (borrador.tituloPlataforma ?? "").trim(),
     };
 
     const erroresActuales = validarConfigSitio(campos);
@@ -228,6 +231,7 @@ export function ConfiguracionForm() {
         // ya guardados.
         <div className="mt-4 flex flex-col gap-3">
           <FilaLectura etiqueta="Razón social" valor={guardado.razonSocial} placeholder="—" />
+          <FilaLectura etiqueta="Título de la plataforma" valor={guardado.tituloPlataforma} placeholder="Sin configurar — usa “Catálogo Mayorista”" />
           <div className="flex flex-col gap-0.5">
             <span className="text-xs font-medium text-ink-500">Logo de marca</span>
             {guardado.logoUrl ? (
@@ -235,7 +239,7 @@ export function ConfiguracionForm() {
                 <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-ink-200 bg-paper p-1">
                   <ImagenProducto src={guardado.logoUrl} alt="Logo de marca" className="h-full w-full" ajuste="cubrir" sizes="56px" />
                 </div>
-                <span className="text-xs text-ink-500">{guardado.logoVisible ? "Visible en login y footer" : "Oculto (archivo conservado)"}</span>
+                <span className="text-xs text-ink-500">{guardado.logoVisible ? "Visible en login y header" : "Oculto (archivo conservado)"}</span>
               </div>
             ) : (
               <span className="text-sm italic text-warning-600">Sin configurar — no se muestra ningún logo</span>
@@ -265,6 +269,16 @@ export function ConfiguracionForm() {
             onChange={(v) => campo("razonSocial", v)}
             maxLength={RAZON_SOCIAL_MAX}
             error={errores.razonSocial}
+          />
+
+          <Campo
+            id="config-tituloPlataforma"
+            etiqueta="Título de la plataforma"
+            ayuda="Se muestra al lado del logo en el header del catálogo público y en la barra superior del panel admin. Vacío = usa “Catálogo Mayorista”."
+            value={borrador.tituloPlataforma ?? ""}
+            onChange={(v) => campo("tituloPlataforma", v)}
+            maxLength={TITULO_PLATAFORMA_MAX}
+            error={errores.tituloPlataforma}
           />
 
           <div>
@@ -317,13 +331,21 @@ export function ConfiguracionForm() {
               </p>
             )}
 
-            <label className="mt-3 flex items-center gap-2.5">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={borrador.logoVisible}
-                onClick={toggleLogoVisible}
-                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 ${
+            {/* Un solo elemento interactivo (antes: <button> anidado dentro
+                de <label> — el navegador reenvía el click del label AL
+                control anidado, así que cada click disparaba onClick dos
+                veces y el switch quedaba "atascado" sin cambiar). El texto
+                va adentro del propio <button> como accessible name, no en
+                un <label> aparte. */}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={borrador.logoVisible}
+              onClick={toggleLogoVisible}
+              className="mt-3 flex items-center gap-2.5 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2"
+            >
+              <span
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
                   borrador.logoVisible ? "bg-ink-900" : "bg-ink-200"
                 }`}
               >
@@ -332,14 +354,14 @@ export function ConfiguracionForm() {
                     borrador.logoVisible ? "translate-x-[22px]" : "translate-x-0.5"
                   }`}
                 />
-              </button>
+              </span>
               <span className="text-sm text-ink-900">
                 {borrador.logoVisible ? "Logo visible" : "Logo oculto"}
                 <span className="ml-1.5 text-xs text-ink-500">
-                  {borrador.logoVisible ? "— se muestra en login y footer" : "— archivo conservado, no se renderiza"}
+                  {borrador.logoVisible ? "— se muestra en login y header" : "— archivo conservado, no se renderiza"}
                 </span>
               </span>
-            </label>
+            </button>
           </div>
 
           <Campo

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { leerCatalogoPublico, leerConfigSitio, leerGuiaTallas } from "@/lib/blob";
+import { leerCatalogoPublico, leerConfigSitio, leerGuiaTallas, leerLogosFooter } from "@/lib/blob";
 import { Header } from "@/components/ui/Header";
 import { Footer } from "@/components/ui/Footer";
 import { DetalleProducto } from "@/components/detalle/DetalleProducto";
@@ -73,9 +73,10 @@ export default async function PaginaProducto({ params, searchParams }: Props) {
   // La guía de tallas es una config fija de todo el calzado del catálogo
   // (no un dato por producto) — se administra aparte, desde el panel admin.
   // Ver GuiaTallasConfig.tsx.
-  const [guiaTallas, config] = await Promise.all([
+  const [guiaTallas, config, logosFooter] = await Promise.all([
     esCalzado(producto.rubro) ? leerGuiaTallas() : Promise.resolve({ instrucciones: null, tabla: null }),
     leerConfigSitio(),
+    leerLogosFooter(),
   ]);
 
   return (
@@ -84,7 +85,7 @@ export default async function PaginaProducto({ params, searchParams }: Props) {
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
         <DetalleProducto producto={producto} colorInicial={color} hrefVolver={hrefVolver} guiaTallas={guiaTallas} />
       </main>
-      <Footer config={config} />
+      <Footer config={config} logosFooter={logosFooter} />
     </>
   );
 }

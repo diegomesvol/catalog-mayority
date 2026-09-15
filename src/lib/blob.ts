@@ -14,6 +14,7 @@ import type {
   ConfigSitio,
   EntradaHistorial,
   GuiaTallas,
+  LogoFooter,
   Producto,
   ResumenImportacion,
 } from "./types";
@@ -538,6 +539,10 @@ export async function subirImagenLogoMarca(nombre: string, bytes: ArrayBuffer, c
   return subirImagenPublica("logo-marca", nombre, bytes, contentType);
 }
 
+export async function subirImagenLogoFooter(nombre: string, bytes: ArrayBuffer, contentType: string): Promise<string> {
+  return subirImagenPublica("logos-footer", nombre, bytes, contentType);
+}
+
 /** Config actual de la guía de tallas (instrucciones + tabla). Nunca falta: si no se configuró aún, ambos campos vienen en null. */
 export const leerGuiaTallas = cache(async (): Promise<GuiaTallas> => {
   const supabase = await crearClienteServidor();
@@ -585,6 +590,36 @@ export async function guardarColecciones(colecciones: Coleccion[]): Promise<void
   if (errorInsercion) throw errorInsercion;
 }
 
+// --- Logos de marca del footer ("Nuestras marcas") -----------------------
+// Mismo patrón que colecciones: el panel maneja alta/edición/borrado/orden
+// como una lista completa en memoria y la guarda de una vez (reemplazo total
+// — borra todo e inserta de nuevo, ver guardarColecciones).
+export const leerLogosFooter = cache(async (): Promise<LogoFooter[]> => {
+  const supabase = await crearClienteServidor();
+  const { data, error } = await supabase.from("logos_footer").select("id, nombre, imagen_url, visible").order("orden", { ascending: true });
+  if (error) {
+    logError("lib/blob.leerLogosFooter", error);
+    return [];
+  }
+  return (data ?? []).map((l) => ({
+    id: l.id as string,
+    nombre: l.nombre as string,
+    imagenUrl: l.imagen_url as string | null,
+    visible: l.visible as boolean,
+  }));
+});
+
+export async function guardarLogosFooter(logos: LogoFooter[]): Promise<void> {
+  const supabase = await crearClienteServidor();
+  const { error: errorBorrado } = await supabase.from("logos_footer").delete().not("id", "is", null);
+  if (errorBorrado) throw errorBorrado;
+  if (logos.length === 0) return;
+
+  const filas = logos.map((l, i) => ({ id: l.id, nombre: l.nombre, imagen_url: l.imagenUrl, visible: l.visible, orden: i }));
+  const { error: errorInsercion } = await supabase.from("logos_footer").insert(filas);
+  if (errorInsercion) throw errorInsercion;
+}
+
 // --- Configuración del sitio ---------------------------------------------
 // Valores operativos editables desde /admin/configuracion (WhatsApp de
 // ventas, datos de contacto del footer) que antes solo se podían cambiar
@@ -599,6 +634,7 @@ export const CONFIG_SITIO_VACIA: ConfigSitio = {
   logoUrl: null,
   logoVisible: true,
   razonSocial: "Calzados Mesvol, C.A.",
+  tituloPlataforma: null,
 };
 
 // cache() — layout.tsx, page.tsx y producto/[id]/page.tsx llaman esto cada
@@ -608,7 +644,7 @@ export const leerConfigSitio = cache(async (): Promise<ConfigSitio> => {
   const supabase = await crearClienteServidor();
   const { data, error } = await supabase
     .from("config_sitio")
-    .select("whatsapp_ventas, descripcion_empresa, rif, fondo_login_url, logo_url, logo_visible, razon_social")
+    .select("whatsapp_ventas, descripcion_empresa, rif, fondo_login_url, logo_url, logo_visible, razon_social, titulo_plataforma")
     .eq("id", true)
     .maybeSingle();
   if (error) {
@@ -624,6 +660,7 @@ export const leerConfigSitio = cache(async (): Promise<ConfigSitio> => {
     logoUrl: data.logo_url as string | null,
     logoVisible: data.logo_visible as boolean,
     razonSocial: (data.razon_social as string) || CONFIG_SITIO_VACIA.razonSocial,
+    tituloPlataforma: data.titulo_plataforma as string | null,
   };
 });
 
@@ -641,6 +678,7 @@ export async function guardarConfigSitio(config: ConfigSitio): Promise<void> {
         logo_url: config.logoUrl,
         logo_visible: config.logoVisible,
         razon_social: config.razonSocial,
+        titulo_plataforma: config.tituloPlataforma,
         actualizado_en: new Date().toISOString(),
       },
       { onConflict: "id" },

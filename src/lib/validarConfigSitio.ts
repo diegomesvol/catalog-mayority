@@ -9,6 +9,7 @@ export const RIF_MAX = 20;
 export const FONDO_LOGIN_URL_MAX = 2000; // margen generoso: puede ser una URL externa larga
 export const LOGO_URL_MAX = 2000; // misma razón que FONDO_LOGIN_URL_MAX
 export const RAZON_SOCIAL_MAX = 150;
+export const TITULO_PLATAFORMA_MAX = 60; // corto a propósito: se muestra al lado del logo en el header, no hay lugar para un título largo
 
 export interface ErroresConfigSitio {
   whatsappVentas?: string;
@@ -17,6 +18,7 @@ export interface ErroresConfigSitio {
   fondoLoginUrl?: string;
   logoUrl?: string;
   razonSocial?: string;
+  tituloPlataforma?: string;
 }
 
 // Los campos de texto ya recortados (trim) — vacío = "no configurado", no
@@ -30,6 +32,7 @@ export interface CamposConfigSitio {
   fondoLoginUrl: string;
   logoUrl: string;
   razonSocial: string;
+  tituloPlataforma: string;
 }
 
 export function validarConfigSitio(campos: CamposConfigSitio): ErroresConfigSitio {
@@ -70,6 +73,12 @@ export function validarConfigSitio(campos: CamposConfigSitio): ErroresConfigSiti
     errores.razonSocial = "La razón social es obligatoria.";
   } else if (campos.razonSocial.length > RAZON_SOCIAL_MAX) {
     errores.razonSocial = `Máximo ${RAZON_SOCIAL_MAX} caracteres.`;
+  }
+
+  // Opcional (a diferencia de razonSocial): vacío = se usa "Catálogo
+  // Mayorista" por defecto en el header público y en la barra del admin.
+  if (campos.tituloPlataforma.length > TITULO_PLATAFORMA_MAX) {
+    errores.tituloPlataforma = `Máximo ${TITULO_PLATAFORMA_MAX} caracteres.`;
   }
 
   return errores;
