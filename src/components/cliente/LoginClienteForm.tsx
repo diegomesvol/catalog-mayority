@@ -5,33 +5,55 @@ import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { logError } from "@/lib/logger";
 import { loginAdminSchema } from "@/lib/schemas/loginAdmin";
+import { crearClienteNavegador } from "@/lib/supabaseNavegador";
 import { AccesoNoAutorizado } from "@/components/ui/AccesoNoAutorizado";
+import { IconoGoogle } from "@/components/admin/IconoGoogle";
 
-// Mismo look que LoginAdminForm.tsx (misma card, mismos estilos de input)
-// a propósito — portal visualmente unificado, aunque el backend sigue
-// separado (login por password contra /api/cliente/login, sin Google: ver
-// la nota en clienteAuth.ts sobre por qué los dos árboles de sesión
-// quedaron aparte). Mismo esquema de validación que el de admin (email +
-// password) — no hay nada específico de "cliente" en la forma.
+// Mismo look que LoginAdminForm.tsx (misma card, mismos estilos de input,
+// mismo botón de Google) a propósito — portal visualmente unificado. El
+// backend de password sigue separado (login contra /api/cliente/login, no
+// /api/admin/login), y Google ahora también: el callback vive en
+// api/cliente/auth/callback (no el de admin) para que el intercambio de
+// sesión valide contra `clientes`, no contra admin_perfiles — ver la nota
+// en clienteAuth.ts sobre por qué los dos árboles de sesión quedaron
+// aparte. Mismo esquema de validación que el de admin (email + password)
+// para el form — no hay nada específico de "cliente" en esa forma.
+const MENSAJES_ERROR_OAUTH: Record<string, string> = {
+  oauth: "No se pudo completar el ingreso con Google. Probá de nuevo.",
+};
+
 type Errores = Partial<Record<"email" | "password", string>>;
 
-export function LoginClienteForm() {
+interface Props {
+  // Mismo contrato que LoginAdminForm — ver la nota ahí.
+  logoUrl: string | null;
+  razonSocial: string;
+}
+
+export function LoginClienteForm({ logoUrl, razonSocial }: Props) {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errores, setErrores] = useState<Errores>({});
   const [cargando, setCargando] = useState(false);
+  const [cargandoGoogle, setCargandoGoogle] = useState(false);
   // Mismo criterio que LoginAdminForm: presencia (no null) = mostrar la card
   // en vez del formulario. Llega por ?error=sin_acceso cuando el proxy
   // revoca una sesión activa-pero-sin-acceso al entrar por URL directa (ver
-  // proxy.ts) — este portal no tiene Google, así que es el único disparador
-  // por query param (el otro es el submit de abajo, con email conocido).
+  // proxy.ts), o cuando vuelve del callback de Google sin fila en
+  // `clientes` (mismo motivo que el disparador del submit de abajo, con
+  // email conocido).
   const [accesoDenegado, setAccesoDenegado] = useState<{ email?: string } | null>(null);
 
   useEffect(() => {
-    if (searchParams.get("error") !== "sin_acceso") return;
+    const error = searchParams.get("error");
+    if (!error) return;
     window.history.replaceState(null, "", window.location.pathname);
-    setAccesoDenegado({});
+    if (error === "sin_acceso") {
+      setAccesoDenegado({});
+    } else if (MENSAJES_ERROR_OAUTH[error]) {
+      toast.error(MENSAJES_ERROR_OAUTH[error]);
+    }
   }, [searchParams]);
 
   async function onSubmit(e: FormEvent) {
@@ -77,16 +99,64 @@ export function LoginClienteForm() {
     }
   }
 
+  async function iniciarGoogle() {
+    setCargandoGoogle(true);
+    try {
+      const { error } = await crearClienteNavegador().auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/api/cliente/auth/callback` },
+      });
+      if (error) {
+        logError("LoginClienteForm.iniciarGoogle", error);
+        toast.error("No se pudo iniciar el ingreso con Google. Probá de nuevo.");
+        setCargandoGoogle(false);
+      }
+      // Si no hubo error, el navegador ya está navegando hacia Google — no
+      // hace falta (ni conviene) apagar cargandoGoogle acá.
+    } catch (err) {
+      logError("LoginClienteForm.iniciarGoogle", err, "No se pudo conectar con el servidor.");
+      toast.error("No se pudo conectar con el servidor.");
+      setCargandoGoogle(false);
+    }
+  }
+
   if (accesoDenegado) {
     return <AccesoNoAutorizado email={accesoDenegado.email} onReintentar={() => setAccesoDenegado(null)} />;
   }
 
   return (
     <div className="w-full max-w-sm rounded-2xl border border-white/40 bg-paper-raised/90 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
-      <h1 className="text-lg font-semibold text-ink-900">Mi cuenta</h1>
-      <p className="mt-1 text-sm text-ink-500">Ingresá con tu cuenta de mayorista.</p>
+      {/* Mismo tratamiento que LoginAdminForm: logo sin fondo propio a la
+          izquierda del título+subtítulo, alineado a la línea base del
+          título (self-start, no center) — ver la nota ahí. */}
+      <div className="flex items-start gap-3">
+        {logoUrl && (
+          // eslint-disable-next-line @next/next/no-img-element -- URL de Supabase Storage o externa (misma razón que fondoLoginUrl en page.tsx)
+          <img src={logoUrl} alt={razonSocial} className="h-11 w-11 shrink-0 object-contain sm:h-12 sm:w-12" />
+        )}
+        <div className="min-w-0">
+          <h1 className="text-lg font-semibold text-ink-900">Panel de cliente mayorista</h1>
+          <p className="mt-1 text-sm text-ink-500">Ingresá con tu cuenta de mayorista.</p>
+        </div>
+      </div>
 
-      <form onSubmit={onSubmit} noValidate className="mt-6">
+      <button
+        type="button"
+        onClick={iniciarGoogle}
+        disabled={cargandoGoogle || cargando}
+        className="mt-6 flex w-full items-center justify-center gap-2.5 rounded-full border border-ink-200 bg-white px-4 py-2.5 text-sm font-medium text-ink-900 shadow-sm transition-colors hover:border-ink-300 hover:bg-ink-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <IconoGoogle />
+        {cargandoGoogle ? "Conectando…" : "Continuar con Google"}
+      </button>
+
+      <div className="my-5 flex items-center gap-3" aria-hidden="true">
+        <div className="h-px flex-1 bg-ink-200" />
+        <span className="text-xs font-medium text-ink-500">o con credenciales</span>
+        <div className="h-px flex-1 bg-ink-200" />
+      </div>
+
+      <form onSubmit={onSubmit} noValidate>
         <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-ink-900">
           Email
         </label>
@@ -132,7 +202,7 @@ export function LoginClienteForm() {
 
         <button
           type="submit"
-          disabled={cargando}
+          disabled={cargando || cargandoGoogle}
           className="mt-5 w-full rounded-full bg-ink-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-ink-700 active:bg-ink-900/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {cargando ? "Ingresando…" : "Ingresar"}

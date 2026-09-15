@@ -23,17 +23,11 @@ export default async function PaginaLoginCliente() {
       </div>
 
       <div className="relative flex w-full max-w-sm flex-col items-center lg:items-end">
-        {logoVisible && logoUrl && (
-          // Mismo tratamiento que /admin/login/page.tsx — ver la nota ahí.
-          // eslint-disable-next-line @next/next/no-img-element -- URL de Supabase Storage o externa, mismo motivo que fondoLoginUrl arriba
-          <img
-            src={logoUrl}
-            alt={razonSocial}
-            className="mb-6 h-14 w-auto max-w-[200px] rounded-2xl bg-white/10 p-2.5 object-contain shadow-lg backdrop-blur-sm sm:h-16"
-          />
-        )}
+        {/* El logo ya NO se pinta acá — vive DENTRO de la card, a la
+            izquierda del título (ver LoginClienteForm), mismo tratamiento
+            que /admin/login/page.tsx. */}
         <Suspense fallback={null}>
-          <LoginClienteForm />
+          <LoginClienteForm logoUrl={logoVisible ? logoUrl : null} razonSocial={razonSocial} />
         </Suspense>
       </div>
     </main>

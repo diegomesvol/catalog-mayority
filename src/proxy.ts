@@ -27,6 +27,8 @@ const RUTAS_PUBLICAS = [
   "/admin/invitacion",
   "/cliente/login",
   "/api/cliente/login",
+  // Mismo motivo que /api/admin/auth/callback — ver la nota ahí.
+  "/api/cliente/auth/callback",
   "/cliente/invitacion",
 ];
 

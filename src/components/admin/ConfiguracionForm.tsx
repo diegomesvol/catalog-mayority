@@ -203,8 +203,7 @@ export function ConfiguracionForm() {
         <div>
           <h2 className="text-sm font-semibold text-ink-900">Datos generales</h2>
           <p className="mt-1 text-xs text-ink-500">
-            Número de WhatsApp de ventas y datos de contacto que se muestran en el catálogo público — antes solo se
-            podían cambiar desde Vercel.
+            Número de WhatsApp de ventas y datos de contacto que se muestran en el catálogo público.
           </p>
         </div>
         {!cargandoInicial && !editando && (
