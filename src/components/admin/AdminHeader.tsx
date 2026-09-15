@@ -66,9 +66,11 @@ export function AdminHeader({ children }: { children: ReactNode }) {
     }
   }
 
+  const titulo = tituloPlataforma?.trim() || TITULO_DEFECTO;
+
   return (
     <div className="flex flex-1">
-      <AdminNav rol={perfil?.rol ?? null} />
+      <AdminNav rol={perfil?.rol ?? null} tituloPlataforma={titulo} />
 
       {/* "min-w-0": sin esto un hijo ancho (ej. una tabla en /admin/catalogo)
           empujaría toda la columna — y con ella el sidebar — más ancha que
@@ -89,12 +91,14 @@ export function AdminHeader({ children }: { children: ReactNode }) {
                   desde "lg" (ver AdminNav), por debajo de eso la navegación
                   es este botón + su drawer. */}
               <MenuMovilAdmin rol={perfil?.rol ?? null} />
-              {/* El sidebar ya muestra "Panel admin" en su propio encabezado
-                  desde "lg" — repetirlo acá también se sentía redundante, así
-                  que en desktop esta barra queda sin título, solo con las
-                  acciones (cerrar sesión) a la derecha. */}
-              <span className="truncate text-base font-semibold tracking-tight text-ink-900 lg:hidden">
-                {tituloPlataforma?.trim() || TITULO_DEFECTO}
+              {/* Antes solo se veía en mobile/tablet (lg:hidden) porque el
+                  sidebar ya muestra "Panel admin" fijo en su propio
+                  encabezado desde "lg" — a pedido, ahora el título dinámico
+                  de la plataforma (ver ConfiguracionForm) se ve siempre acá,
+                  en cualquier tamaño de pantalla, aunque quede repetido con
+                  el nombre fijo del sidebar. */}
+              <span className="truncate text-base font-semibold tracking-tight text-ink-900">
+                {titulo}
               </span>
               {perfil?.solo_lectura && (
                 <span className="shrink-0 rounded-full border border-warning-600/30 bg-warning-100 px-2.5 py-0.5 text-xs font-medium text-warning-600">

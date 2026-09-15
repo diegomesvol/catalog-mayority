@@ -15,7 +15,7 @@ const CLAVE_COLAPSADO = "admin-sidebar-colapsado";
 // renombrarlo). Por debajo de "lg" (mobile y tablet) la navegación sigue
 // siendo el drawer de MenuMovilAdmin — mismo NAV_ADMIN en los dos, ver la
 // nota ahí para por qué está compartido en vez de duplicado.
-export function AdminNav({ rol }: { rol: RolAdmin | null }) {
+export function AdminNav({ rol, tituloPlataforma }: { rol: RolAdmin | null; tituloPlataforma: string }) {
   const pathname = usePathname();
   const items = itemsVisibles(NAV_ADMIN, rol);
   const idPanel = useId();
@@ -56,7 +56,10 @@ export function AdminNav({ rol }: { rol: RolAdmin | null }) {
       }`}
     >
       <div className={`flex h-[57px] shrink-0 items-center border-b border-ink-200 ${colapsado ? "justify-center px-0" : "justify-between px-4"}`}>
-        {!colapsado && <span className="truncate text-base font-semibold tracking-tight text-ink-900">Panel admin</span>}
+        {/* Antes decía fijo "Panel admin" — ahora usa el mismo título dinámico
+            de la plataforma que ya muestra AdminHeader (ver ese archivo), a
+            pedido, para no repetir dos textos distintos en desktop. */}
+        {!colapsado && <span className="truncate text-base font-semibold tracking-tight text-ink-900">{tituloPlataforma}</span>}
         <button
           type="button"
           onClick={alternar}
