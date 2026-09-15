@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useLayoutEffect, useState } from "react";
+import { useId, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ADMIN, esItemActivo, itemsVisibles } from "@/lib/adminNav";
@@ -24,20 +24,22 @@ export function AdminNav({ rol }: { rol: RolAdmin | null }) {
   // persistente por encima de las páginas del panel (cada una monta este
   // componente de nuevo — ver la nota grande en AdminHeader), así que sin
   // esto el sidebar volvería a expandirse solo con cada click a otra
-  // sección. Arranca en `false` (expandido) para que el primer render en el
-  // servidor y en el cliente coincidan (no hay localStorage en el server);
-  // si el admin lo había colapsado antes, el efecto lo ajusta apenas monta
-  // — el saltito de expandido a colapsado en esa primera pintura es el
-  // costo aceptado a cambio de no tocar la arquitectura de rutas.
-  const [colapsado, setColapsado] = useState(false);
-
-  // useLayoutEffect (no useEffect): corre sincrónico antes de que el
-  // navegador pinte el frame. Con useEffect, cada remount (no hay layout
-  // persistente por encima — ver nota de arriba) pintaba un frame expandido
-  // y recién al siguiente lo colapsaba: el "parpadeo doble" reportado.
-  useLayoutEffect(() => {
-    if (window.localStorage.getItem(CLAVE_COLAPSADO) === "1") setColapsado(true);
-  }, []);
+  // sección.
+  //
+  // Se lee localStorage directo en el inicializador de useState (no en un
+  // efecto posterior): en cualquier navegación por click (<Link>, la
+  // inmensa mayoría de los casos) este componente monta ya del lado del
+  // cliente, sin paso por SSR — así que el primer render sale con el valor
+  // correcto de una sola vez, sin una segunda pasada que corrija y sin
+  // parpadeo. El único caso donde SSR sí entra en juego es la carga dura
+  // inicial (refrescar la página): ahí el HTML del servidor no puede saber
+  // el valor de localStorage y sale expandido por un instante hasta que
+  // React hidrata — ese único parpadeo, solo en el primer load, es el costo
+  // aceptado a cambio de no tocar la arquitectura de rutas.
+  const [colapsado, setColapsado] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(CLAVE_COLAPSADO) === "1";
+  });
 
   function alternar() {
     setColapsado((previo) => {
