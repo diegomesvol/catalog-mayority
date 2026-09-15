@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { logError } from "@/lib/logger";
@@ -208,6 +209,19 @@ export function LoginClienteForm({ logoUrl, razonSocial }: Props) {
           {cargando ? "Ingresando…" : "Ingresar"}
         </button>
       </form>
+
+      {/* Acceso directo al catálogo sin loguearse — deliberadamente
+          discreto (texto simple, ink-500) para no competir con "Ingresar"
+          (el CTA principal, sólido en ink-900): es una salida secundaria,
+          no una segunda acción igual de importante. */}
+      <p className="mt-5 text-center text-sm text-ink-500">
+        <Link
+          href="/"
+          className="font-medium underline-offset-2 hover:text-ink-900 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 rounded"
+        >
+          Explorar el catálogo sin iniciar sesión
+        </Link>
+      </p>
     </div>
   );
 }

@@ -7,8 +7,7 @@ import { BusquedaProvider } from "@/components/catalogo/BusquedaContext";
 import { ModoOffline } from "@/components/ui/ModoOffline";
 import { leerConfigSitio } from "@/lib/blob";
 import { sanearNumeroWhatsApp } from "@/lib/carrito";
-import { crearClienteServidor } from "@/lib/supabase";
-import { obtenerClienteActivo } from "@/lib/clienteAuth";
+import { obtenerClienteActivoCacheado } from "@/lib/sesionCliente";
 import "./globals.css";
 
 // Fuente del sistema en vez de next/font/google: carga instantánea, cero
@@ -61,10 +60,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   // grande ahí). perfilCompleto (la columna generada clientes.perfil_completo)
   // sí se expone además del booleano de logueado — lo usa el botón "Realizar
   // pedido" del carrito para bloquear con shake+toast si falta completarlo.
-  const [config, clienteActivo] = await Promise.all([
-    leerConfigSitio(),
-    crearClienteServidor().then((supabase) => obtenerClienteActivo(supabase)),
-  ]);
+  // obtenerClienteActivoCacheado (no obtenerClienteActivo + un cliente
+  // propio): cacheada por request, así no compite por el refresh token con
+  // la misma consulta que hace Header.tsx en este mismo request — ver la
+  // nota grande en lib/sesionCliente.ts.
+  const [config, clienteActivo] = await Promise.all([leerConfigSitio(), obtenerClienteActivoCacheado()]);
   const numeroWhatsApp = sanearNumeroWhatsApp(config.whatsappVentas);
 
   return (

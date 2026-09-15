@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
-import { toast } from "sonner";
-import { logError } from "@/lib/logger";
+import { iniciales } from "@/lib/format";
+import { useCerrarSesion } from "@/hooks/useCerrarSesion";
 
 interface ClienteSesion {
   nombre: string;
@@ -23,14 +22,6 @@ interface Props {
   logoTiendaUrl?: string | null;
 }
 
-function iniciales(nombre: string): string {
-  const partes = nombre.trim().split(/\s+/).filter(Boolean);
-  if (partes.length === 0) return "?";
-  const primera = partes[0][0];
-  const segunda = partes.length > 1 ? partes[partes.length - 1][0] : "";
-  return (primera + segunda).toUpperCase();
-}
-
 // Reemplaza el link simple "Ingresar"/"Mi cuenta" del header público (ver
 // Header.tsx): sin sesión, mismo link de siempre; con sesión activa, ahora
 // se ve QUIÉN está logueado (avatar de Google o iniciales + punto "en
@@ -43,11 +34,10 @@ function iniciales(nombre: string): string {
 // medio del catálogo público, así que solo se refresca la página actual
 // para que el header vuelva a "Ingresar" sin sacarlo de donde estaba.
 export function CuentaClienteMenu({ cliente, logoTiendaUrl = null }: Props) {
-  const router = useRouter();
   const [abierto, setAbierto] = useState(false);
-  const [saliendo, setSaliendo] = useState(false);
   const contenedorRef = useRef<HTMLDivElement>(null);
   const idMenu = useId();
+  const { saliendo, salir } = useCerrarSesion({ endpoint: "/api/cliente/logout", origen: "CuentaClienteMenu.salir" });
 
   useEffect(() => {
     if (!abierto) return;
@@ -65,22 +55,9 @@ export function CuentaClienteMenu({ cliente, logoTiendaUrl = null }: Props) {
     };
   }, [abierto]);
 
-  async function salir() {
-    setSaliendo(true);
-    try {
-      await fetch("/api/cliente/logout", { method: "POST" });
-      setAbierto(false);
-      router.refresh();
-    } catch (err) {
-      logError(
-        "CuentaClienteMenu.salir",
-        err,
-        "No se pudo llegar al servidor para cerrar sesión — revisá tu conexión a internet y probá de nuevo.",
-      );
-      toast.error("No se pudo cerrar sesión. Probá de nuevo.");
-    } finally {
-      setSaliendo(false);
-    }
+  function tocarSalir() {
+    setAbierto(false);
+    salir();
   }
 
   if (!cliente) {
@@ -162,7 +139,7 @@ export function CuentaClienteMenu({ cliente, logoTiendaUrl = null }: Props) {
           <button
             type="button"
             role="menuitem"
-            onClick={salir}
+            onClick={tocarSalir}
             disabled={saliendo}
             className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm font-medium text-danger-600 transition-colors hover:bg-danger-100 disabled:cursor-not-allowed disabled:opacity-50"
           >

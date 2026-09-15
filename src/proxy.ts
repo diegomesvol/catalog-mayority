@@ -35,18 +35,57 @@ const RUTAS_PUBLICAS = [
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (RUTAS_PUBLICAS.some((ruta) => pathname === ruta)) {
-    return NextResponse.next();
-  }
-
-  const esArbolCliente = pathname.startsWith("/cliente") || pathname.startsWith("/api/cliente");
-
   // La response se crea ANTES de leer el perfil y se devuelve al final: es
   // donde crearClienteProxy escribe el refresco de cookies de sesión de
   // Supabase — devolver una response distinta perdería ese refresco y
   // desloguearía a la sesión en cuanto el access token expire.
   const response = NextResponse.next();
   const supabase = crearClienteProxy(request, response);
+
+  if (RUTAS_PUBLICAS.some((ruta) => pathname === ruta)) {
+    // Igual se refresca (ver la nota grande de abajo) — puede llegar acá con
+    // una cookie de sesión vencida (ej. volviendo al login desde el catálogo).
+    await supabase.auth.getUser();
+    return response;
+  }
+
+  const esArbolCliente = pathname.startsWith("/cliente") || pathname.startsWith("/api/cliente");
+  const esArbolAdmin = pathname.startsWith("/admin") || pathname.startsWith("/api/admin");
+
+  // BUG DE SESIÓN "FANTASMA" (cliente logueado al que "Mi cuenta" mandaba al
+  // login pese a tener sesión activa): este proxy antes solo corría sobre
+  // /admin y /cliente (ver el matcher de abajo, ensanchado ahora). Mientras
+  // un cliente mayorista navegaba el catálogo público, NADA refrescaba su
+  // sesión de Supabase ahí: los Server Components (RootLayout, Header) no
+  // pueden escribir cookies (ver la nota en crearClienteServidor,
+  // lib/supabase.ts) y eran el ÚNICO lugar que consultaba la sesión en esas
+  // páginas. Cuando el access token vencía, dos Server Components del MISMO
+  // request (RootLayout y Header, cada uno con su propio cliente de
+  // Supabase) disparaban su propio refresh EN PARALELO usando el mismo
+  // refresh token — de un solo uso, rota en cada refresh. El primero lo
+  // consumía y renovaba contra el servidor de Supabase, pero no podía
+  // guardar esa rotación (no hay dónde escribir cookies desde un Server
+  // Component); el segundo llegaba con el refresh token viejo, YA usado, y
+  // fallaba. Resultado: la sesión quedaba muerta en el navegador (con un
+  // refresh token ya inválido) mientras el cliente todavía "se veía"
+  // logueado en el header de esa misma carga — y explotaba recién al entrar
+  // a /cliente, la primera ruta que sí pasaba por acá, que interpretaba "no
+  // hay sesión" y mandaba al login.
+  //
+  // La corrección real es ensanchar el matcher para que este proxy corra en
+  // TODA la app (ver export const config abajo) y refrescar acá — el único
+  // lugar que SÍ puede persistir el refresh (via response.cookies) — para
+  // cualquier ruta fuera de los dos árboles protegidos, sin exigirles
+  // sesión. Con el token siempre al día antes de que corra cualquier Server
+  // Component, ya no hay dos refrescos compitiendo por el mismo refresh
+  // token: cuando RootLayout/Header llaman a getUser() por su cuenta más
+  // abajo en el árbol, el token ya está fresco y esa llamada es una simple
+  // validación, no un refresh.
+  if (!esArbolCliente && !esArbolAdmin) {
+    await supabase.auth.getUser();
+    return response;
+  }
+
   const perfil = esArbolCliente ? await obtenerClienteActivo(supabase) : await obtenerAdminActivo(supabase);
 
   if (!perfil) {
@@ -86,5 +125,10 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/admin/:path*", "/cliente/:path*", "/api/cliente/:path*"],
+  // Antes solo cubría /admin y /cliente — ver la nota grande de arriba sobre
+  // por qué eso dejaba el catálogo público sin refresco de sesión. Ahora
+  // corre en toda la app salvo assets estáticos (mismo patrón que recomienda
+  // Next.js para middleware global) — la lógica de arriba sigue exigiendo
+  // sesión solo para /admin y /cliente, el resto solo refresca el token.
+  matcher: ["/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|xml|txt|webmanifest)$).*)"],
 };
