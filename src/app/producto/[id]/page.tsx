@@ -68,7 +68,9 @@ export default async function PaginaProducto({ params, searchParams }: Props) {
 
   // Solo se usa si viene del catálogo (empieza con "/"); cualquier otro
   // valor (link editado a mano, por ejemplo) cae al catálogo sin filtrar.
-  const hrefVolver = volver && volver.startsWith("/") ? volver : "/";
+  // "//dominio" y "/\dominio" también empiezan con "/" pero el navegador los
+  // resuelve como otro sitio (open redirect) — se descartan.
+  const hrefVolver = volver && volver.startsWith("/") && !volver.startsWith("//") && !volver.includes("\\") ? volver : "/";
 
   // La guía de tallas es una config fija de todo el calzado del catálogo
   // (no un dato por producto) — se administra aparte, desde el panel admin.

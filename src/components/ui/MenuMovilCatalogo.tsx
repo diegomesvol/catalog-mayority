@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useBloqueoScroll } from "@/hooks/useBloqueoScroll";
@@ -21,6 +21,9 @@ interface Props {
   // foto de Google) — ver la nota en ese componente.
   logoTiendaUrl?: string | null;
 }
+
+// true solo en el navegador (false en SSR/hidratación) sin setState en un efecto.
+const suscribirNada = () => () => {};
 
 // Botón de hamburguesa + drawer para el header del catálogo público, solo
 // mobile/tablet (por debajo de "sm" — Header.tsx pasa a mostrar todo inline
@@ -55,7 +58,7 @@ export function MenuMovilCatalogo({ cliente, logoTiendaUrl = null }: Props) {
   // de ocupar el alto completo de la pantalla. document.body no existe en
   // el render de servidor, así que el portal espera a este guard de montaje
   // para evitar el mismatch de hidratación.
-  const [montado, setMontado] = useState(false);
+  const montado = useSyncExternalStore(suscribirNada, () => true, () => false);
   const idPanel = useId();
   const botonRef = useRef<HTMLButtonElement>(null);
   const { items, abrir: abrirCarrito } = useCarrito();
@@ -67,10 +70,6 @@ export function MenuMovilCatalogo({ cliente, logoTiendaUrl = null }: Props) {
   const { saliendo, salir } = useCerrarSesion({ endpoint: "/api/cliente/logout", origen: "MenuMovilCatalogo.salir" });
 
   useBloqueoScroll(abierto);
-
-  useEffect(() => {
-    setMontado(true);
-  }, []);
 
   function cerrar() {
     setAbierto(false);
@@ -152,6 +151,10 @@ export function MenuMovilCatalogo({ cliente, logoTiendaUrl = null }: Props) {
               role="dialog"
               aria-modal="true"
               aria-label="Menú del catálogo"
+              // Cerrado queda fuera de pantalla pero en el DOM: sin esto el lector
+              // de pantalla y el Tab seguían entrando a un diálogo invisible.
+              aria-hidden={!abierto}
+              inert={!abierto}
               className={`fixed inset-y-0 left-0 z-50 flex w-full max-w-xs flex-col bg-paper-raised shadow-2xl transition-transform duration-300 sm:hidden ${
                 abierto ? "translate-x-0" : "-translate-x-full"
               }`}

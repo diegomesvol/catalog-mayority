@@ -263,7 +263,10 @@ export async function guardarCatalogoPendiente(catalogo: Catalogo): Promise<void
       await supabase.storage.from(BUCKET_PRIVADO).remove([viejo.archivo_original_path as string]).catch(() => {});
     }
     // Cascada (ON DELETE CASCADE): se lleva productos/variantes/curvas/tallas de esa carga.
-    await supabase.from("cargas").delete().eq("id", viejo.id);
+    // Antes el error se ignoraba: si el borrado fallaba (ej. otra sesión la
+    // estaba publicando en ese instante) quedaban DOS cargas "pendiente".
+    const { error: errorBorrado } = await supabase.from("cargas").delete().eq("id", viejo.id).eq("estado", "pendiente");
+    if (errorBorrado) throw errorBorrado;
   }
 
   const { data: nueva, error } = await supabase
@@ -273,7 +276,14 @@ export async function guardarCatalogoPendiente(catalogo: Catalogo): Promise<void
     .single();
   if (error) throw error;
 
-  await insertarArbolCatalogo(supabase, nueva.id as string, catalogo.productos);
+  try {
+    await insertarArbolCatalogo(supabase, nueva.id as string, catalogo.productos);
+  } catch (err) {
+    // Un lote que falla a mitad dejaba una carga "pendiente" con el árbol
+    // incompleto, que después se podía confirmar y publicar. Se descarta.
+    await supabase.from("cargas").delete().eq("id", nueva.id);
+    throw err;
+  }
 }
 
 export async function leerCatalogoPendiente(): Promise<Catalogo | null> {
@@ -338,9 +348,11 @@ export async function confirmarReemplazoCatalogo(): Promise<Catalogo> {
   const { error: errorPuntero } = await supabase.from("catalogo_activo").update({ carga_id: pendiente.id }).eq("id", true);
   if (errorPuntero) throw errorPuntero;
 
-  await supabase.from("cargas").update({ estado: "publicada" }).eq("id", pendiente.id);
-  if (cargaAnteriorId) {
-    await supabase.from("cargas").update({ estado: "descartada" }).eq("id", cargaAnteriorId);
+  const { error: errorEstado } = await supabase.from("cargas").update({ estado: "publicada" }).eq("id", pendiente.id);
+  if (errorEstado) throw errorEstado;
+  if (cargaAnteriorId && cargaAnteriorId !== pendiente.id) {
+    const { error: errorAnterior } = await supabase.from("cargas").update({ estado: "descartada" }).eq("id", cargaAnteriorId);
+    if (errorAnterior) throw errorAnterior;
   }
 
   const catalogo = await construirCatalogoDesdeCarga(supabase, pendiente.id as string);
@@ -354,7 +366,11 @@ export async function leerCatalogoBackup(): Promise<Catalogo | null> {
     .from("cargas")
     .select("id")
     .eq("estado", "descartada")
-    .not("total_productos", "eq", 0) // descarta registros puramente de historial ("revertir"), que no tienen árbol propio
+    // Los marcadores de historial ("revertir") no tienen árbol propio. Antes
+    // se filtraban por total_productos = 0, pero el marcador COPIA
+    // total_productos del respaldo, así que nunca quedaba afuera: el segundo
+    // "Revertir" publicaba una carga vacía.
+    .neq("origen", "revertir")
     .order("creado_en", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -371,7 +387,7 @@ export async function revertirABackup(): Promise<Catalogo> {
     .from("cargas")
     .select("id, total_productos, total_variantes")
     .eq("estado", "descartada")
-    .not("total_productos", "eq", 0)
+    .neq("origen", "revertir") // ver la nota en leerCatalogoBackup
     .order("creado_en", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -379,10 +395,15 @@ export async function revertirABackup(): Promise<Catalogo> {
     throw new Error("No hay respaldo disponible para revertir.");
   }
 
-  await supabase.from("catalogo_activo").update({ carga_id: backup.id }).eq("id", true);
-  await supabase.from("cargas").update({ estado: "publicada" }).eq("id", backup.id);
+  // Antes ninguno de estos errores se revisaba: si el UPDATE del puntero
+  // fallaba, la API igual respondía "revertido" sin haber cambiado nada.
+  const { error: errorPuntero } = await supabase.from("catalogo_activo").update({ carga_id: backup.id }).eq("id", true);
+  if (errorPuntero) throw errorPuntero;
+  const { error: errorEstado } = await supabase.from("cargas").update({ estado: "publicada" }).eq("id", backup.id);
+  if (errorEstado) throw errorEstado;
   if (activo?.carga_id) {
-    await supabase.from("cargas").update({ estado: "descartada" }).eq("id", activo.carga_id);
+    const { error: errorAnterior } = await supabase.from("cargas").update({ estado: "descartada" }).eq("id", activo.carga_id);
+    if (errorAnterior) throw errorAnterior;
   }
 
   // Registro del evento en sí (mismo criterio que antes: un revert también

@@ -32,6 +32,13 @@ const RUTAS_PUBLICAS = [
   "/cliente/invitacion",
 ];
 
+// Copia las cookies que Supabase escribió en `origen` (refresh/signOut) a
+// una response distinta (redirect/json) — sin esto se pierden.
+function conCookiesDe(origen: NextResponse, destino: NextResponse): NextResponse {
+  origen.cookies.getAll().forEach((cookie) => destino.cookies.set(cookie));
+  return destino;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -43,6 +50,20 @@ export async function proxy(request: NextRequest) {
   const supabase = crearClienteProxy(request, response);
 
   if (RUTAS_PUBLICAS.some((ruta) => pathname === ruta)) {
+    // Login con una sesión YA válida para ese portal → directo al panel, en
+    // vez de mostrar el formulario (antes el cliente logueado que tocaba
+    // "Ingresar" desde un link viejo volvía a ver el login).
+    if (pathname === "/cliente/login" || pathname === "/admin/login") {
+      const esLoginCliente = pathname === "/cliente/login";
+      const perfilActual = esLoginCliente ? await obtenerClienteActivo(supabase) : await obtenerAdminActivo(supabase);
+      if (perfilActual) {
+        const url = request.nextUrl.clone();
+        url.pathname = esLoginCliente ? "/cliente" : "/admin";
+        url.search = "";
+        return conCookiesDe(response, NextResponse.redirect(url));
+      }
+      return response;
+    }
     // Igual se refresca (ver la nota grande de abajo) — puede llegar acá con
     // una cookie de sesión vencida (ej. volviendo al login desde el catálogo).
     await supabase.auth.getUser();
@@ -98,16 +119,20 @@ export async function proxy(request: NextRequest) {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (user) await supabase.auth.signOut();
+    // Admin y cliente comparten la MISMA sesión de Supabase: antes se hacía
+    // signOut() siempre, así que un cliente que entraba a /admin (o un admin
+    // a /cliente) perdía su propia sesión válida del otro portal. Solo se
+    // revoca si la cuenta no tiene acceso a NINGUNO de los dos.
+    if (user) {
+      const perfilOtroPortal = esArbolCliente ? await obtenerAdminActivo(supabase) : await obtenerClienteActivo(supabase);
+      if (!perfilOtroPortal) await supabase.auth.signOut();
+    }
 
     // signOut() (y el refresco normal de sesión) escribieron sus cookies en
     // `response` vía crearClienteProxy — pero acá abajo se devuelve un
     // response DISTINTO (redirect o json). Sin copiar esas cookies se
     // pierden y la sesión queda "viva" en el navegador pese al signOut.
-    const conCookies = (destino: NextResponse) => {
-      response.cookies.getAll().forEach((cookie) => destino.cookies.set(cookie));
-      return destino;
-    };
+    const conCookies = (destino: NextResponse) => conCookiesDe(response, destino);
 
     if (pathname.startsWith("/api/")) {
       return conCookies(

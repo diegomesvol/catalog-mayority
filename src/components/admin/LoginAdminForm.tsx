@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { logError } from "@/lib/logger";
 import { loginAdminSchema } from "@/lib/schemas/loginAdmin";
 import { crearClienteNavegador } from "@/lib/supabaseNavegador";
+import { destinoPostLogin } from "@/lib/destinoLogin";
 import { AccesoNoAutorizado } from "@/components/ui/AccesoNoAutorizado";
 import { IconoGoogle } from "./IconoGoogle";
 
@@ -46,7 +47,12 @@ export function LoginAdminForm({ logoUrl, razonSocial }: Props) {
   // Presencia (no null) = mostrar la card en vez del formulario. El email es
   // opcional: se conoce si vino del login por password (submit de abajo),
   // pero no si vino de Google o de una sesión revocada por el proxy.
-  const [accesoDenegado, setAccesoDenegado] = useState<{ email?: string } | null>(null);
+  const [accesoDenegado, setAccesoDenegado] = useState<{ email?: string } | null>(() =>
+    searchParams.get("error") === "sin_acceso" ? {} : null,
+  );
+  // Se congela al montar: el efecto de ?error= limpia la URL (replaceState)
+  // y con eso useSearchParams pierde el ?next= que dejó el proxy.
+  const [destino] = useState(() => destinoPostLogin(searchParams.get("next"), "/admin"));
 
   useEffect(() => {
     const error = searchParams.get("error");
@@ -55,9 +61,8 @@ export function LoginAdminForm({ logoUrl, razonSocial }: Props) {
     // toast — igual criterio que PaginaInvitacion con el hash del token (no
     // debe quedar pegado en el historial del navegador).
     window.history.replaceState(null, "", window.location.pathname);
-    if (error === "sin_acceso") {
-      setAccesoDenegado({});
-    } else if (MENSAJES_ERROR_OAUTH[error]) {
+    // "sin_acceso" ya se resolvió en el estado inicial de accesoDenegado.
+    if (error !== "sin_acceso" && MENSAJES_ERROR_OAUTH[error]) {
       toast.error(MENSAJES_ERROR_OAUTH[error]);
     }
   }, [searchParams]);
@@ -110,7 +115,7 @@ export function LoginAdminForm({ logoUrl, razonSocial }: Props) {
       // router del lado del cliente sirva una versión vieja de /admin, o que
       // push() y refresh() se pisen entre sí.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- intencional: navegación dura tras el login
-      window.location.href = "/admin";
+      window.location.href = destino;
     } catch (err) {
       logError("LoginAdminForm.onSubmit", err, "No se pudo llegar al servidor — revisá tu conexión a internet y probá de nuevo.");
       toast.error("No se pudo conectar con el servidor.");

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { logError } from "@/lib/logger";
 import { loginAdminSchema } from "@/lib/schemas/loginAdmin";
 import { crearClienteNavegador } from "@/lib/supabaseNavegador";
+import { destinoPostLogin } from "@/lib/destinoLogin";
 import { AccesoNoAutorizado } from "@/components/ui/AccesoNoAutorizado";
 import { IconoGoogle } from "@/components/admin/IconoGoogle";
 
@@ -44,15 +45,19 @@ export function LoginClienteForm({ logoUrl, razonSocial }: Props) {
   // proxy.ts), o cuando vuelve del callback de Google sin fila en
   // `clientes` (mismo motivo que el disparador del submit de abajo, con
   // email conocido).
-  const [accesoDenegado, setAccesoDenegado] = useState<{ email?: string } | null>(null);
+  const [accesoDenegado, setAccesoDenegado] = useState<{ email?: string } | null>(() =>
+    searchParams.get("error") === "sin_acceso" ? {} : null,
+  );
+  // Se congela al montar: el efecto de ?error= limpia la URL (replaceState)
+  // y con eso useSearchParams pierde el ?next= que dejó el proxy.
+  const [destino] = useState(() => destinoPostLogin(searchParams.get("next"), "/cliente"));
 
   useEffect(() => {
     const error = searchParams.get("error");
     if (!error) return;
     window.history.replaceState(null, "", window.location.pathname);
-    if (error === "sin_acceso") {
-      setAccesoDenegado({});
-    } else if (MENSAJES_ERROR_OAUTH[error]) {
+    // "sin_acceso" ya se resolvió en el estado inicial de accesoDenegado.
+    if (error !== "sin_acceso" && MENSAJES_ERROR_OAUTH[error]) {
       toast.error(MENSAJES_ERROR_OAUTH[error]);
     }
   }, [searchParams]);
@@ -92,7 +97,7 @@ export function LoginClienteForm({ logoUrl, razonSocial }: Props) {
       }
       toast.success("Sesión iniciada");
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- intencional: navegación dura tras el login
-      window.location.href = "/cliente";
+      window.location.href = destino;
     } catch (err) {
       logError("LoginClienteForm.onSubmit", err, "No se pudo llegar al servidor — revisá tu conexión a internet y probá de nuevo.");
       toast.error("No se pudo conectar con el servidor.");

@@ -41,10 +41,13 @@ export function ProductCard({
   const calzado = esCalzado(producto.rubro);
   const disponibleProducto = tieneStockProducto(producto);
   const promocion = promocionActiva(producto);
-  const href =
-    volver && volver !== "/"
-      ? `/producto/${producto.id}?volver=${encodeURIComponent(volver)}`
-      : `/producto/${producto.id}`;
+  // El detalle abre en el color elegido en la tarjeta (antes siempre abría
+  // en el color por defecto, aunque el comprador hubiera elegido otro).
+  const paramsDetalle = new URLSearchParams();
+  if (volver && volver !== "/") paramsDetalle.set("volver", volver);
+  if (colorSeleccionado.color !== colorPorDefecto(producto).color) paramsDetalle.set("color", colorSeleccionado.color);
+  const queryDetalle = paramsDetalle.toString();
+  const href = queryDetalle ? `/producto/${producto.id}?${queryDetalle}` : `/producto/${producto.id}`;
 
   // El detalle de producto no se descarga ni funciona offline (ver la nota
   // grande en api/descarga/manifiesto/route.ts) — sin conexión, la tarjeta

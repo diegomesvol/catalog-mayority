@@ -27,16 +27,38 @@ export type ResultadoRecalculo =
   | { ok: false; mensaje: string };
 
 export function recalcularPedido(catalogo: Catalogo, solicitados: ItemSolicitado[]): ResultadoRecalculo {
+  const { items, faltantes } = resolverItems(catalogo, solicitados);
+  if (faltantes.length > 0) {
+    const s = faltantes[0];
+    const etiqueta = [s.modelo, s.color].filter(Boolean).join(" ") || s.productoId;
+    return { ok: false, mensaje: `"${etiqueta}" ya no está disponible en el catálogo vigente. Actualizá tu carrito.` };
+  }
+
+  // Redondeo a centavos: la columna es numeric(10,2).
+  const total = Math.round(totalCarrito(items) * 100) / 100;
+  return { ok: true, items, total };
+}
+
+/**
+ * Para sincronizar el carrito guardado en el navegador con el catálogo
+ * vigente (precios/stock actualizados, líneas que ya no existen). A
+ * diferencia de recalcularPedido, no corta en el primer faltante.
+ */
+export function resolverItems(
+  catalogo: Catalogo,
+  solicitados: ItemSolicitado[],
+): { items: ItemCarrito[]; faltantes: ItemSolicitado[] } {
   const porId = new Map(catalogo.productos.map((p) => [p.id, p]));
   const items: ItemCarrito[] = [];
+  const faltantes: ItemSolicitado[] = [];
 
   for (const s of solicitados) {
     const producto = porId.get(s.productoId);
     const color = producto ? buscarColor(producto, s.color) : undefined;
     const curva = color ? buscarCurva(color, s.curvaId) : undefined;
     if (!producto || !color || !curva) {
-      const etiqueta = [s.modelo, s.color].filter(Boolean).join(" ") || s.productoId;
-      return { ok: false, mensaje: `"${etiqueta}" ya no está disponible en el catálogo vigente. Actualizá tu carrito.` };
+      faltantes.push(s);
+      continue;
     }
 
     items.push({
@@ -57,7 +79,5 @@ export function recalcularPedido(catalogo: Catalogo, solicitados: ItemSolicitado
     });
   }
 
-  // Redondeo a centavos: la columna es numeric(10,2).
-  const total = Math.round(totalCarrito(items) * 100) / 100;
-  return { ok: true, items, total };
+  return { items, faltantes };
 }

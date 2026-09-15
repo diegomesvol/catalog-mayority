@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { recalcularPedido } from "./pedidoServidor";
+import { recalcularPedido, resolverItems } from "./pedidoServidor";
 import type { Catalogo } from "./types";
 
 const catalogo: Catalogo = {
@@ -50,5 +50,18 @@ describe("recalcularPedido", () => {
   it("rechaza ítems que no existen en el catálogo vigente", () => {
     const r = recalcularPedido(catalogo, [{ productoId: "aike", color: "ROJO", curvaId: "35-40", cantidad: 1 }]);
     expect(r.ok).toBe(false);
+  });
+});
+
+describe("resolverItems", () => {
+  it("separa las líneas vigentes de las que ya no existen", () => {
+    const { items, faltantes } = resolverItems(catalogo, [
+      { productoId: "aike", color: "NEGRO", curvaId: "35-40", cantidad: 1 },
+      { productoId: "borrado", color: "NEGRO", curvaId: "35-40", cantidad: 1 },
+    ]);
+    expect(items).toHaveLength(1);
+    expect(items[0].itemId).toBe("aike::NEGRO::35-40");
+    expect(items[0].stockDisponible).toBe(2);
+    expect(faltantes.map((f) => f.productoId)).toEqual(["borrado"]);
   });
 });

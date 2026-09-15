@@ -45,6 +45,15 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ ok: false, mensaje: "No autenticado." }, { status: 401 });
 
+    // La regla "perfil completo para pedir" solo vivía en el botón del
+    // carrito; cualquier POST directo la salteaba.
+    if (!permiso.perfil.perfilCompleto) {
+      return NextResponse.json(
+        { ok: false, mensaje: "Completá tu perfil para poder realizar pedidos.", codigo: "PERFIL_INCOMPLETO" },
+        { status: 403 },
+      );
+    }
+
     // Precios/total NUNCA del body: se recalculan contra el catálogo vigente.
     const catalogo = await leerCatalogoPublico();
     if (!catalogo) {
@@ -64,7 +73,14 @@ export async function POST(request: NextRequest) {
       .insert({
         cliente_id: user.id,
         items: recalculo.items,
-        comprador: parsed.data.comprador,
+        // Identidad del comprador desde el perfil (definido por el admin al
+        // invitar), no desde el formulario del carrito, que es editable.
+        comprador: {
+          nombre: permiso.perfil.nombre,
+          empresa: permiso.perfil.empresa,
+          telefono: permiso.perfil.telefono,
+          rif: permiso.perfil.rif,
+        },
         total: recalculo.total,
       })
       .select()

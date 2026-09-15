@@ -83,6 +83,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
               numeroWhatsApp={numeroWhatsApp}
               clienteLogueado={Boolean(clienteActivo)}
               perfilCompleto={clienteActivo?.perfilCompleto ?? false}
+              datosCliente={
+                clienteActivo
+                  ? { nombre: clienteActivo.nombre, empresa: clienteActivo.empresa, telefono: clienteActivo.telefono, rif: clienteActivo.rif }
+                  : null
+              }
             >
               {children}
               <CarritoDrawer />
