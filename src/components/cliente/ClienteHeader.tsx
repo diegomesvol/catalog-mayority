@@ -1,10 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
-import { toast } from "sonner";
-import { logError } from "@/lib/logger";
+import type { ReactNode } from "react";
 import { ClienteNav, ClienteNavMovil } from "./ClienteNav";
 
 // Shell del portal de cliente — mismo patrón que AdminHeader.tsx (sidebar +
@@ -15,40 +12,21 @@ import { ClienteNav, ClienteNavMovil } from "./ClienteNav";
 // borrar el original, algo que no se puede hacer en el dispositivo
 // conectado. login/invitacion NO importan esto a propósito, así quedan sin
 // sidebar — igual que /admin/login y /admin/invitacion.
+//
+// "Cerrar sesión" vivía acá (barra superior) — se movió al pie de ClienteNav
+// / ClienteNavMovil (mismo pedido que en el panel admin: unificar el cierre
+// de sesión en la navegación, no en la topbar). Sin esa acción, la barra de
+// acá ya no tiene nada que mostrar en desktop (ClienteNav ya repite "Mi
+// cuenta" en su propio encabezado) — queda lg:hidden, solo el título mobile.
 export function ClienteHeader({ children, perfilCompleto }: { children: ReactNode; perfilCompleto: boolean }) {
-  const router = useRouter();
-  const [saliendo, setSaliendo] = useState(false);
-
-  async function salir() {
-    setSaliendo(true);
-    try {
-      await fetch("/api/cliente/logout", { method: "POST" });
-      router.push("/cliente/login");
-      router.refresh();
-    } catch (err) {
-      logError("ClienteHeader.salir", err, "No se pudo llegar al servidor para cerrar sesión — revisá tu conexión a internet y probá de nuevo.");
-      toast.error("No se pudo cerrar sesión. Probá de nuevo.");
-      setSaliendo(false);
-    }
-  }
-
   return (
     <div className="flex flex-1">
       <ClienteNav />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
-        <header className="flex h-[57px] shrink-0 items-center border-b border-ink-200 bg-paper-raised">
-          <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 px-4 sm:px-6">
-            <span className="truncate text-base font-semibold tracking-tight text-ink-900 lg:hidden">Mi cuenta</span>
-            <div className="hidden lg:block" />
-            <button
-              type="button"
-              onClick={salir}
-              disabled={saliendo}
-              className="shrink-0 rounded-full px-2.5 py-1 text-sm font-medium text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-900 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Cerrar sesión
-            </button>
+        <header className="flex h-[57px] shrink-0 items-center border-b border-ink-200 bg-paper-raised lg:hidden">
+          <div className="mx-auto flex w-full max-w-3xl items-center px-4 sm:px-6">
+            <span className="truncate text-base font-semibold tracking-tight text-ink-900">Mi cuenta</span>
           </div>
         </header>
         <ClienteNavMovil />

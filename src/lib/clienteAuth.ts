@@ -13,6 +13,14 @@ export interface PerfilCliente {
   telefono: string;
   rif: string;
   activo: boolean;
+  // Del usuario de Supabase Auth, no de la tabla `clientes` (no hay columna
+  // propia para esto) — email siempre presente (requisito de Auth); avatar
+  // solo si el cliente entró con Google (user_metadata.avatar_url/picture),
+  // null con login por contraseña. Usados para el indicador de sesión en el
+  // header público (ver CuentaClienteMenu) — nada de esto es un dato del
+  // perfil de negocio, así que no vive en la tabla.
+  email: string;
+  avatarUrl: string | null;
   // Campos del onboarding (ver lib/schemas/perfilCliente.ts) — null hasta
   // que el cliente los completa. perfilCompleto es la columna generada
   // clientes.perfil_completo: una sola fuente de verdad, no se recalcula acá.
@@ -40,7 +48,7 @@ interface FilaClienteDB {
   perfil_completo: boolean;
 }
 
-function mapearPerfilDesdeDB(fila: FilaClienteDB): PerfilCliente {
+function mapearPerfilDesdeDB(fila: FilaClienteDB, email: string, avatarUrl: string | null): PerfilCliente {
   return {
     nombre: fila.nombre,
     empresa: fila.empresa,
@@ -54,6 +62,8 @@ function mapearPerfilDesdeDB(fila: FilaClienteDB): PerfilCliente {
     estadoUbicacion: fila.estado_ubicacion,
     metodosPago: fila.metodos_pago ?? [],
     perfilCompleto: fila.perfil_completo,
+    email,
+    avatarUrl,
   };
 }
 
@@ -79,7 +89,9 @@ export async function obtenerClienteActivo(supabase: SupabaseClient): Promise<Pe
   // RLS/permiso acá no debe quedar indistinguible de "no es cliente".
   if (error) logError("obtenerClienteActivo", error);
   if (!perfil || !perfil.activo) return null;
-  return mapearPerfilDesdeDB(perfil as FilaClienteDB);
+
+  const avatarUrl = (user.user_metadata?.avatar_url ?? user.user_metadata?.picture ?? null) as string | null;
+  return mapearPerfilDesdeDB(perfil as FilaClienteDB, user.email ?? "", avatarUrl);
 }
 
 /** Igual que requierePermisoEscritura (lib/auth.ts) pero para rutas /api/cliente/*. */

@@ -5,7 +5,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ADMIN, esItemActivo, itemsVisibles } from "@/lib/adminNav";
 import type { RolAdmin } from "@/lib/auth";
+import { useCerrarSesion } from "@/hooks/useCerrarSesion";
+import { BotonCerrarSesion } from "@/components/ui/BotonCerrarSesion";
 import { IconoSeccionAdmin } from "./IconoSeccionAdmin";
+import { VerCatalogoPublico } from "./VerCatalogoPublico";
 
 const CLAVE_COLAPSADO = "admin-sidebar-colapsado";
 
@@ -19,6 +22,11 @@ export function AdminNav({ rol }: { rol: RolAdmin | null }) {
   const pathname = usePathname();
   const items = itemsVisibles(NAV_ADMIN, rol);
   const idPanel = useId();
+  // "Cerrar sesión" vivía en la barra superior (AdminHeader) — se movió acá,
+  // al pie del sidebar (mismo lugar en el drawer mobile, ver MenuMovilAdmin),
+  // pedido explícito de unificar el cierre de sesión en la navegación en vez
+  // de la topbar.
+  const { saliendo, salir } = useCerrarSesion({ endpoint: "/api/admin/logout", redirectTo: "/admin/login", origen: "AdminNav.salir" });
 
   // Colapsado/expandido, recordado entre navegaciones. No hay un layout
   // persistente por encima de las páginas del panel (cada una monta este
@@ -134,6 +142,15 @@ export function AdminNav({ rol }: { rol: RolAdmin | null }) {
           );
         })}
       </nav>
+
+      {/* Pie del sidebar — "Ver catálogo público" (acceso neutro, no es una
+          sección de gestión) justo encima de "Cerrar sesión" (destructiva,
+          en rojo), a pedido. Mismo criterio de colapsado que el resto del
+          sidebar: solo ícono cuando colapsado, ícono + texto expandido. */}
+      <div className="flex flex-col gap-1 border-t border-ink-200 p-2">
+        <VerCatalogoPublico soloIcono={colapsado} />
+        <BotonCerrarSesion saliendo={saliendo} onClick={salir} soloIcono={colapsado} />
+      </div>
     </aside>
   );
 }

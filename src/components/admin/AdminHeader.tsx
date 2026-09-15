@@ -1,9 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { toast } from "sonner";
-import { logError } from "@/lib/logger";
 import { fetchJson } from "@/lib/apiCliente";
 import type { PerfilAdmin } from "@/lib/auth";
 import type { ConfigSitio } from "@/lib/types";
@@ -28,8 +25,6 @@ const TITULO_DEFECTO = "Catálogo Mayorista";
 // ella misma: el sidebar guarda su estado colapsado/expandido en
 // localStorage (ver AdminNav) para no "olvidarlo" en cada navegación.
 export function AdminHeader({ children }: { children: ReactNode }) {
-  const router = useRouter();
-  const [saliendo, setSaliendo] = useState(false);
   const [perfil, setPerfil] = useState<PerfilAdmin | null>(null);
   const [tituloPlataforma, setTituloPlataforma] = useState<string | null>(null);
   const [cargandoTitulo, setCargandoTitulo] = useState(true);
@@ -55,19 +50,6 @@ export function AdminHeader({ children }: { children: ReactNode }) {
       })
       .finally(() => setCargandoTitulo(false));
   }, []);
-
-  async function salir() {
-    setSaliendo(true);
-    try {
-      await fetch("/api/admin/logout", { method: "POST" });
-      router.push("/admin/login");
-      router.refresh();
-    } catch (err) {
-      logError("AdminHeader.salir", err, "No se pudo llegar al servidor para cerrar sesión — revisá tu conexión a internet y probá de nuevo.");
-      toast.error("No se pudo cerrar sesión. Probá de nuevo.");
-      setSaliendo(false);
-    }
-  }
 
   const titulo = tituloPlataforma?.trim() || TITULO_DEFECTO;
 
@@ -120,14 +102,6 @@ export function AdminHeader({ children }: { children: ReactNode }) {
                 </span>
               )}
             </div>
-            <button
-              type="button"
-              onClick={salir}
-              disabled={saliendo}
-              className="shrink-0 rounded-full px-2.5 py-1 text-sm font-medium text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-900 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Cerrar sesión
-            </button>
           </div>
         </header>
         <AvisoModoDemo />

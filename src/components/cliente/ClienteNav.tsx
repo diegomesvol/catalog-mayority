@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useCerrarSesion } from "@/hooks/useCerrarSesion";
+import { BotonCerrarSesion } from "@/components/ui/BotonCerrarSesion";
 
 // Nav del portal de cliente — mismo espíritu que AdminNav (sidebar fijo
 // desde "lg", ver esa nota grande) pero deliberadamente más simple: acá son
@@ -23,6 +25,9 @@ function esItemActivo(href: string, pathname: string): boolean {
 
 export function ClienteNav() {
   const pathname = usePathname();
+  // "Cerrar sesión" vivía en ClienteHeader (barra superior) — se movió al
+  // pie del sidebar, mismo pedido que en el panel admin (ver AdminNav).
+  const { saliendo, salir } = useCerrarSesion({ endpoint: "/api/cliente/logout", redirectTo: "/cliente/login", origen: "ClienteNav.salir" });
 
   return (
     <aside
@@ -50,6 +55,10 @@ export function ClienteNav() {
           );
         })}
       </nav>
+
+      <div className="border-t border-ink-200 p-2">
+        <BotonCerrarSesion saliendo={saliendo} onClick={salir} />
+      </div>
     </aside>
   );
 }
@@ -59,6 +68,10 @@ export function ClienteNav() {
 // un drawer aparte (a diferencia del panel admin, con 6 secciones).
 export function ClienteNavMovil() {
   const pathname = usePathname();
+  // Mismo cierre de sesión que el sidebar de escritorio (ver ClienteNav) —
+  // acá como pill circular ícono-solo al final de la barra (redondo), no
+  // hay espacio para el texto en este layout horizontal.
+  const { saliendo, salir } = useCerrarSesion({ endpoint: "/api/cliente/logout", redirectTo: "/cliente/login", origen: "ClienteNavMovil.salir" });
   return (
     <nav aria-label="Secciones de mi cuenta" className="flex items-center gap-1 overflow-x-auto border-b border-ink-200 bg-paper-raised px-2 py-2 lg:hidden">
       {ITEMS.map((item) => {
@@ -77,6 +90,8 @@ export function ClienteNavMovil() {
           </Link>
         );
       })}
+      <div className="ml-auto h-6 w-px shrink-0 bg-ink-200" aria-hidden="true" />
+      <BotonCerrarSesion saliendo={saliendo} onClick={salir} redondo />
     </nav>
   );
 }

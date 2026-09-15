@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CarritoBoton } from "@/components/carrito/CarritoBoton";
 import { BuscadorNavbar } from "./BuscadorNavbar";
+import { CuentaClienteMenu } from "./CuentaClienteMenu";
 import { DescargaOffline } from "./DescargaOffline";
 import { crearClienteServidor } from "@/lib/supabase";
 import { obtenerClienteActivo } from "@/lib/clienteAuth";
@@ -66,18 +67,13 @@ export async function Header() {
         <div className="flex min-w-0 items-center justify-self-end gap-1 sm:gap-2">
           <DescargaOffline />
           {/* Visible en cualquier parte del scroll (header sticky) — mismo
-              criterio que BuscadorNavbar/CarritoBoton. Va a /cliente si ya
-              hay sesión (portal), a /cliente/login si no. */}
-          <Link
-            href={clienteActivo ? "/cliente" : "/cliente/login"}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-ink-200 px-2.5 py-2 text-sm font-medium text-ink-900 transition-colors hover:border-ink-900 sm:px-3.5"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" strokeLinecap="round" strokeLinejoin="round" />
-              <circle cx="12" cy="7" r="4" />
-            </svg>
-            <span className="hidden sm:inline">{clienteActivo ? "Mi cuenta" : "Ingresar"}</span>
-          </Link>
+              criterio que BuscadorNavbar/CarritoBoton. Con sesión activa
+              muestra avatar/iniciales + menú (Mi cuenta / Cerrar sesión) en
+              vez del link genérico — ver CuentaClienteMenu. */}
+          <CuentaClienteMenu
+            cliente={clienteActivo ? { nombre: clienteActivo.nombre, email: clienteActivo.email, avatarUrl: clienteActivo.avatarUrl } : null}
+            logoTiendaUrl={config.logoUrl}
+          />
           <CarritoBoton />
         </div>
       </div>

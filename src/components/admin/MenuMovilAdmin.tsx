@@ -6,7 +6,10 @@ import { usePathname } from "next/navigation";
 import { NAV_ADMIN, esItemActivo, itemsVisibles } from "@/lib/adminNav";
 import type { RolAdmin } from "@/lib/auth";
 import { useBloqueoScroll } from "@/hooks/useBloqueoScroll";
+import { useCerrarSesion } from "@/hooks/useCerrarSesion";
+import { BotonCerrarSesion } from "@/components/ui/BotonCerrarSesion";
 import { IconoSeccionAdmin } from "./IconoSeccionAdmin";
+import { VerCatalogoPublico } from "./VerCatalogoPublico";
 
 // Botón de hamburguesa + drawer de navegación para mobile/tablet (por debajo
 // de "lg") — AdminNav.tsx es el sidebar colapsable de "lg" en adelante,
@@ -22,6 +25,9 @@ export function MenuMovilAdmin({ rol }: { rol: RolAdmin | null }) {
   const idPanel = useId();
   const botonRef = useRef<HTMLButtonElement>(null);
   const items = itemsVisibles(NAV_ADMIN, rol);
+  // Mismo footer que el sidebar de escritorio (ver AdminNav) — acá siempre
+  // expandido (ícono + texto), el drawer no tiene un modo "colapsado" propio.
+  const { saliendo, salir } = useCerrarSesion({ endpoint: "/api/admin/logout", redirectTo: "/admin/login", origen: "MenuMovilAdmin.salir" });
 
   // Bloquea el scroll de atrás mientras el drawer está abierto (pedido
   // explícito) — ver la nota en el hook.
@@ -127,6 +133,13 @@ export function MenuMovilAdmin({ rol }: { rol: RolAdmin | null }) {
             );
           })}
         </nav>
+
+        {/* Mismo pie que el sidebar de escritorio (ver AdminNav): catálogo
+            público arriba (neutro), cerrar sesión abajo (rojo). */}
+        <div className="flex flex-col gap-1 border-t border-ink-200 p-3">
+          <VerCatalogoPublico />
+          <BotonCerrarSesion saliendo={saliendo} onClick={salir} />
+        </div>
       </aside>
     </>
   );
