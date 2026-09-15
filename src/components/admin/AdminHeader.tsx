@@ -1,42 +1,112 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { toast } from "sonner";
-import { logError } from "@/lib/logger";
+import { useEffect, useState, type ReactNode } from "react";
+import { fetchJson } from "@/lib/apiCliente";
+import type { PerfilAdmin } from "@/lib/auth";
+import type { ConfigSitio } from "@/lib/types";
 import { AdminNav } from "./AdminNav";
+import { AvisoModoDemo } from "./AvisoModoDemo";
+import { MenuMovilAdmin } from "./MenuMovilAdmin";
 
-export function AdminHeader() {
-  const router = useRouter();
-  const [saliendo, setSaliendo] = useState(false);
+const TITULO_DEFECTO = "Catálogo Mayorista";
 
-  async function salir() {
-    setSaliendo(true);
-    try {
-      await fetch("/api/admin/logout", { method: "POST" });
-      router.push("/admin/login");
-      router.refresh();
-    } catch (err) {
-      logError("AdminHeader.salir", err, "No se pudo llegar al servidor para cerrar sesión — revisá tu conexión a internet y probá de nuevo.");
-      toast.error("No se pudo cerrar sesión. Probá de nuevo.");
-      setSaliendo(false);
-    }
-  }
+// Shell completo del panel: sidebar de escritorio (AdminNav) + barra
+// superior + el <main> de cada página, que ahora llega como "children" en
+// vez de ser un <main> hermano suelto (ver cada page.tsx/loading.tsx bajo
+// app/admin). El nombre del archivo/componente quedó de cuando esto era
+// solo la barra superior — se mantiene porque es el único punto de import
+// (una decena de páginas) y no hay forma de renombrar sin dejar un archivo
+// huérfano de por medio (sin acceso a borrar en el dispositivo conectado).
+//
+// No existe un layout.tsx de Next por encima de estas páginas (login/
+// invitacion viven bajo /admin pero NO deben tener sidebar/topbar, y
+// separarlas a un route group implicaría mover archivos — tampoco posible
+// sin borrar los originales). Por eso cada página sigue montando este shell
+// ella misma: el sidebar guarda su estado colapsado/expandido en
+// localStorage (ver AdminNav) para no "olvidarlo" en cada navegación.
+export function AdminHeader({ children }: { children: ReactNode }) {
+  const [perfil, setPerfil] = useState<PerfilAdmin | null>(null);
+  const [tituloPlataforma, setTituloPlataforma] = useState<string | null>(null);
+  const [cargandoTitulo, setCargandoTitulo] = useState(true);
+
+  // Solo para el badge de "modo demostración" — el bloqueo real ya lo hace
+  // el servidor en cada ruta de escritura (requierePermisoEscritura); esto
+  // es puramente informativo, no una barrera de seguridad.
+  useEffect(() => {
+    fetchJson<{ ok: boolean; perfil?: PerfilAdmin }>("/api/admin/me").then(({ data }) => {
+      if (data?.ok && data.perfil) setPerfil(data.perfil);
+    });
+  }, []);
+
+  // Mismo título dinámico que el header del catálogo público (ver Header.tsx
+  // y el campo "Título de la plataforma" en ConfiguracionForm) — acá se pide
+  // client-side porque AdminHeader es un Client Component sin acceso directo
+  // a leerConfigSitio(); /api/admin/config GET no requiere sesión de
+  // escritura, solo lectura pública de la config.
+  useEffect(() => {
+    fetchJson<{ ok: boolean; config?: ConfigSitio }>("/api/admin/config")
+      .then(({ data }) => {
+        if (data?.ok && data.config) setTituloPlataforma(data.config.tituloPlataforma);
+      })
+      .finally(() => setCargandoTitulo(false));
+  }, []);
+
+  const titulo = tituloPlataforma?.trim() || TITULO_DEFECTO;
 
   return (
-    <header className="border-b border-ink-200 bg-paper-raised">
-      <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3.5 sm:px-6">
-        <span className="text-base font-semibold tracking-tight text-ink-900">Panel de administración</span>
-        <button
-          type="button"
-          onClick={salir}
-          disabled={saliendo}
-          className="text-sm font-medium text-ink-500 hover:text-ink-900 disabled:opacity-50"
-        >
-          Cerrar sesión
-        </button>
+    <div className="flex flex-1">
+      <AdminNav rol={perfil?.rol ?? null} />
+
+      {/* "min-w-0": sin esto un hijo ancho (ej. una tabla en /admin/catalogo)
+          empujaría toda la columna — y con ella el sidebar — más ancha que
+          la pantalla, en vez de scrollear puntualmente adentro.
+          "overflow-x-hidden": red de seguridad adicional — cualquier
+          contenido que aun así se pase de ancho (ej. un tooltip o badge mal
+          medido) queda contenido acá en vez de empujar un scroll horizontal
+          a toda la página. */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
+        {/* "h-[57px]": mismo alto exacto que la franja superior del sidebar
+            (ver AdminNav) — con alturas distintas, el border-b de acá y el
+            border-r del sidebar no coincidían en la esquina y se veía un
+            "escalón" en vez de una unión limpia entre las dos líneas. */}
+        <header className="flex h-[57px] shrink-0 items-center border-b border-ink-200 bg-paper-raised">
+          <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 px-4 sm:px-6">
+            <div className="flex min-w-0 items-center gap-2">
+              {/* Drawer de mobile/tablet: el sidebar de acá arriba solo se ve
+                  desde "lg" (ver AdminNav), por debajo de eso la navegación
+                  es este botón + su drawer. */}
+              <MenuMovilAdmin rol={perfil?.rol ?? null} />
+              {/* Antes solo se veía en mobile/tablet (lg:hidden) porque el
+                  sidebar ya muestra "Panel admin" fijo en su propio
+                  encabezado desde "lg" — a pedido, ahora el título dinámico
+                  de la plataforma (ver ConfiguracionForm) se ve siempre acá,
+                  en cualquier tamaño de pantalla, aunque quede repetido con
+                  el nombre fijo del sidebar. Mientras se resuelve el fetch a
+                  /api/admin/config, un skeleton en vez del título — así no
+                  parpadea de "Catálogo Mayorista" (el fallback) al valor real
+                  apenas llega la respuesta; si la respuesta llega vacía, ahí
+                  sí se queda con el fallback. */}
+              {cargandoTitulo ? (
+                <span
+                  aria-hidden="true"
+                  className="h-5 w-32 animate-pulse rounded bg-ink-100"
+                />
+              ) : (
+                <span className="truncate text-base font-semibold tracking-tight text-ink-900">
+                  {titulo}
+                </span>
+              )}
+              {perfil?.solo_lectura && (
+                <span className="shrink-0 rounded-full border border-warning-600/30 bg-warning-100 px-2.5 py-0.5 text-xs font-medium text-warning-600">
+                  Modo demostración
+                </span>
+              )}
+            </div>
+          </div>
+        </header>
+        <AvisoModoDemo />
+        {children}
       </div>
-      <AdminNav />
-    </header>
+    </div>
   );
 }

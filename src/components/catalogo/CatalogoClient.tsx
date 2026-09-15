@@ -95,8 +95,17 @@ export function CatalogoClient({ productos }: { productos: Producto[] }) {
   // (BuscadorNavbar), visible en cualquier parte del scroll, no solo arriba
   // del catálogo — BusquedaContext es el punto compartido entre ambos. El
   // resto de los filtros (marca, color, talla, etc.) sigue como antes.
-  const { busqueda, setBusqueda } = useBusqueda();
+  const { busqueda, setBusqueda, setModoVivo } = useBusqueda();
   const filtrosCombinados = useMemo<ValorFiltros>(() => ({ ...filtros, busqueda }), [filtros, busqueda]);
+
+  // Le avisa a BuscadorNavbar (vía BusquedaContext) que la grilla está
+  // montada y filtrando en vivo — ver la nota en BusquedaContext.tsx. Si
+  // page.tsx está mostrando el landing de colecciones en su lugar, este
+  // efecto nunca corre y el navbar sabe que no puede filtrar en vivo.
+  useEffect(() => {
+    setModoVivo(true);
+    return () => setModoVivo(false);
+  }, [setModoVivo]);
 
   // Orden por defecto (sin búsqueda/filtros activos): calzado antes que
   // accesorios, luego por marca y modelo — para que el catálogo abra con una

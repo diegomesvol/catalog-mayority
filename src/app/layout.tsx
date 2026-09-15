@@ -7,6 +7,7 @@ import { BusquedaProvider } from "@/components/catalogo/BusquedaContext";
 import { ModoOffline } from "@/components/ui/ModoOffline";
 import { leerConfigSitio } from "@/lib/blob";
 import { sanearNumeroWhatsApp } from "@/lib/carrito";
+import { obtenerClienteActivoCacheado } from "@/lib/sesionCliente";
 import "./globals.css";
 
 // Fuente del sistema en vez de next/font/google: carga instantánea, cero
@@ -51,7 +52,19 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   // request, y se pasa a CarritoProvider. Si el admin no configuró ninguno
   // todavía, CarritoProvider cae solo al de la variable de entorno (ver
   // numeroWhatsAppVentas en lib/carrito.ts).
-  const config = await leerConfigSitio();
+  //
+  // Mismo criterio para saber si hay un cliente logueado: se resuelve acá
+  // (una vez por request) y se pasa como booleano a CarritoProvider — lo
+  // único que necesita usePedidoWhatsApp para decidir si, además de abrir
+  // WhatsApp, intenta guardar el pedido en /api/cliente/pedidos (ver la nota
+  // grande ahí). perfilCompleto (la columna generada clientes.perfil_completo)
+  // sí se expone además del booleano de logueado — lo usa el botón "Realizar
+  // pedido" del carrito para bloquear con shake+toast si falta completarlo.
+  // obtenerClienteActivoCacheado (no obtenerClienteActivo + un cliente
+  // propio): cacheada por request, así no compite por el refresh token con
+  // la misma consulta que hace Header.tsx en este mismo request — ver la
+  // nota grande en lib/sesionCliente.ts.
+  const [config, clienteActivo] = await Promise.all([leerConfigSitio(), obtenerClienteActivoCacheado()]);
   const numeroWhatsApp = sanearNumeroWhatsApp(config.whatsappVentas);
 
   return (
@@ -66,7 +79,16 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             useSearchParams no rompa el build. */}
         <Suspense fallback={null}>
           <BusquedaProvider>
-            <CarritoProvider numeroWhatsApp={numeroWhatsApp}>
+            <CarritoProvider
+              numeroWhatsApp={numeroWhatsApp}
+              clienteLogueado={Boolean(clienteActivo)}
+              perfilCompleto={clienteActivo?.perfilCompleto ?? false}
+              datosCliente={
+                clienteActivo
+                  ? { nombre: clienteActivo.nombre, empresa: clienteActivo.empresa, telefono: clienteActivo.telefono, rif: clienteActivo.rif }
+                  : null
+              }
+            >
               {children}
               <CarritoDrawer />
             </CarritoProvider>

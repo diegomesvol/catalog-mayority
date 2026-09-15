@@ -6,7 +6,8 @@ import { ImagenProducto } from "./ImagenProducto";
 import { AgregarCarritoCard } from "./AgregarCarritoCard";
 import { CompartirCard } from "./CompartirCard";
 import { SelectorCurvaCard } from "./SelectorCurvaCard";
-import type { Producto } from "@/lib/types";
+import { VariantesColorCard } from "./VariantesColorCard";
+import type { Producto, VarianteColor } from "@/lib/types";
 import { colorPorDefecto, curvaPorDefecto, precioTextoProducto, promocionActiva, tieneStockCurva, tieneStockProducto } from "@/lib/producto";
 import { esCalzado } from "@/lib/transform";
 import { useSinConexion } from "@/hooks/useSinConexion";
@@ -20,22 +21,33 @@ export function ProductCard({
   prioridad?: boolean;
   volver?: string;
 }) {
-  // La tarjeta muestra UN producto por modelo (ya no uno por modelo+color) —
-  // "colorDefecto" decide qué foto/color aparece acá; el selector de COLOR
-  // sigue viviendo solo en el detalle, para no sumar interactividad que el
-  // catálogo no necesita ahí. La CURVA es distinta: antes se agregaba al
+  // La tarjeta muestra UN producto por modelo (ya no uno por modelo+color).
+  // "colorSeleccionado" es el color ACTIVO de la tarjeta — arranca en el
+  // primero con stock (colorPorDefecto) pero ahora sí se puede cambiar acá
+  // mismo con las miniaturas de VariantesColorCard, sin entrar al detalle:
+  // decide la foto grande, el color que se agrega al pedido y el que se
+  // comparte. "colorPrevisualizado" es aparte y solo dura mientras el mouse
+  // (o el foco) está sobre una miniatura — no toca la selección real, ver
+  // la nota en VariantesColorCard.
+  //
+  // La CURVA es un selector distinto y ya existía: antes se agregaba al
   // pedido en silencio con la curva "por defecto" sin que el comprador
-  // supiera cuál — ahora, si el color por defecto tiene más de una curva,
-  // esta tarjeta se vuelve stateful ("use client") para dejarlo elegir acá
-  // mismo (ver SelectorCurvaCard) antes de agregar.
-  const colorDefecto = colorPorDefecto(producto);
+  // supiera cuál — ahora, si el color activo tiene más de una curva, esta
+  // tarjeta se vuelve stateful ("use client") para dejarlo elegir acá mismo
+  // (ver SelectorCurvaCard) antes de agregar.
+  const [colorSeleccionado, setColorSeleccionado] = useState(() => colorPorDefecto(producto));
+  const [colorPrevisualizado, setColorPrevisualizado] = useState<VarianteColor | null>(null);
+  const colorMostrado = colorPrevisualizado ?? colorSeleccionado;
   const calzado = esCalzado(producto.rubro);
   const disponibleProducto = tieneStockProducto(producto);
   const promocion = promocionActiva(producto);
-  const href =
-    volver && volver !== "/"
-      ? `/producto/${producto.id}?volver=${encodeURIComponent(volver)}`
-      : `/producto/${producto.id}`;
+  // El detalle abre en el color elegido en la tarjeta (antes siempre abría
+  // en el color por defecto, aunque el comprador hubiera elegido otro).
+  const paramsDetalle = new URLSearchParams();
+  if (volver && volver !== "/") paramsDetalle.set("volver", volver);
+  if (colorSeleccionado.color !== colorPorDefecto(producto).color) paramsDetalle.set("color", colorSeleccionado.color);
+  const queryDetalle = paramsDetalle.toString();
+  const href = queryDetalle ? `/producto/${producto.id}?${queryDetalle}` : `/producto/${producto.id}`;
 
   // El detalle de producto no se descarga ni funciona offline (ver la nota
   // grande en api/descarga/manifiesto/route.ts) — sin conexión, la tarjeta
@@ -45,13 +57,22 @@ export function ProductCard({
   // error.
   const sinConexion = useSinConexion();
 
-  const [curvaId, setCurvaId] = useState(() => curvaPorDefecto(colorDefecto).id);
-  const curvaSeleccionada = colorDefecto.curvas.find((c) => c.id === curvaId) ?? curvaPorDefecto(colorDefecto);
+  const [curvaId, setCurvaId] = useState(() => curvaPorDefecto(colorSeleccionado).id);
+  const curvaSeleccionada = colorSeleccionado.curvas.find((c) => c.id === curvaId) ?? curvaPorDefecto(colorSeleccionado);
   // Accesorios no tienen curva real (siempre "Único", ver transform.ts): la
   // disponibilidad del botón sigue siendo la del producto. En calzado pasa
   // a depender de la curva puntual que está seleccionada — puede haber
   // stock en otra curva del mismo color y no en esta.
   const disponibleSeleccion = calzado ? tieneStockCurva(curvaSeleccionada) : disponibleProducto;
+
+  // Cambiar de color puede cambiar también el set de curvas disponibles
+  // (un color puede traer rangos de talla distintos a otro) — sin resetear
+  // acá, "curvaId" podría apuntar a un id que no existe en el color nuevo y
+  // SelectorCurvaCard se quedaría sin ningún chip marcado como activo.
+  function seleccionarColor(color: VarianteColor) {
+    setColorSeleccionado(color);
+    setCurvaId(curvaPorDefecto(color).id);
+  }
 
   return (
     // "group relative": ya no es el <Link> el contenedor — el link pasa a
@@ -74,8 +95,8 @@ export function ProductCard({
     >
       <div className="relative aspect-[3/4] w-full">
         <ImagenProducto
-          src={colorDefecto.fotos[0]}
-          alt={producto.modelo}
+          src={colorMostrado.fotos[0]}
+          alt={producto.colores.length > 1 ? `${producto.modelo} — color ${colorMostrado.color}` : producto.modelo}
           priority={prioridad}
           className="h-full w-full transition-transform duration-300 group-hover:scale-[1.04]"
         />
@@ -99,28 +120,40 @@ export function ProductCard({
             link de la tarjeta (z-10), así el click acá nunca navega, sin
             necesitar preventDefault. */}
         <div className="absolute right-2 top-2 z-20">
-          <CompartirCard producto={producto} />
+          <CompartirCard producto={producto} color={colorSeleccionado.color} />
         </div>
         <div className="absolute bottom-2 right-2 z-20">
-          <AgregarCarritoCard producto={producto} color={colorDefecto} curva={curvaSeleccionada} disponible={disponibleSeleccion} />
+          <AgregarCarritoCard producto={producto} color={colorSeleccionado} curva={curvaSeleccionada} disponible={disponibleSeleccion} />
         </div>
       </div>
-      <div className="flex flex-1 flex-col gap-1 p-3 sm:p-4">
+      <div className="flex flex-1 flex-col gap-1.5 p-3 sm:p-4">
+        {/* Miniaturas de color — solo si hay más de uno (ver VariantesColorCard).
+            Van primero: "debajo de la foto grande, encima de la info básica". */}
+        {producto.colores.length > 1 && (
+          <VariantesColorCard
+            colores={producto.colores}
+            colorActivo={colorSeleccionado.color}
+            onSeleccionar={seleccionarColor}
+            onPrevisualizar={setColorPrevisualizado}
+          />
+        )}
+
         <span className="text-xs font-medium uppercase tracking-wide text-ink-500">{producto.marca}</span>
         <h3 className="line-clamp-2 text-sm font-medium text-ink-900 sm:text-base">{producto.modelo}</h3>
 
         {calzado &&
-          (colorDefecto.curvas.length > 1 ? (
-            <SelectorCurvaCard curvas={colorDefecto.curvas} seleccionada={curvaId} onSeleccionar={setCurvaId} />
+          (colorSeleccionado.curvas.length > 1 ? (
+            <SelectorCurvaCard curvas={colorSeleccionado.curvas} seleccionada={curvaId} onSeleccionar={setCurvaId} />
           ) : curvaSeleccionada.rango !== "Único" ? (
             <span className="text-[11px] font-medium text-ink-500">Curva {curvaSeleccionada.rango}</span>
           ) : null)}
 
         <div className="mt-auto flex items-center justify-between pt-2">
           <span className="text-base font-semibold text-ink-900 sm:text-lg">{precioTextoProducto(producto)}</span>
-          <span className="text-xs text-ink-500">
-            {producto.colores.length > 1 ? `${producto.colores.length} colores` : colorDefecto.color}
-          </span>
+          {/* Antes decía "N colores" cuando había más de uno — ahora que las
+              miniaturas de arriba ya muestran cuántos hay, es más útil
+              mostrar CUÁL está activo (y que reaccione en vivo al hover). */}
+          <span className="text-xs text-ink-500">{colorMostrado.color}</span>
         </div>
       </div>
 

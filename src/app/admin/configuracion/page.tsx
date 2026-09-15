@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { ConfiguracionForm } from "@/components/admin/ConfiguracionForm";
-import { GuiaTallasConfig } from "@/components/admin/GuiaTallasConfig";
+import { LogosFooterConfig } from "@/components/admin/LogosFooterConfig";
+import { PerfilSeguridadAdmin } from "@/components/admin/PerfilSeguridadAdmin";
+import { leerLogosFooter } from "@/lib/blob";
 
 export const metadata = { title: "Configuración · Panel de administración" };
 // Mismo motivo que las otras dos pestañas del panel: sin esto, Next intenta
@@ -12,19 +14,18 @@ export const metadata = { title: "Configuración · Panel de administración" };
 // del login y no gana nada con quedar estática.
 export const dynamic = "force-dynamic";
 
-export default function PaginaAdminConfiguracion() {
+export default async function PaginaAdminConfiguracion() {
+  const logosFooter = await leerLogosFooter();
+
   return (
-    <>
-      <AdminHeader />
+    <AdminHeader>
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
         <ConfiguracionForm />
-        <GuiaTallasConfig />
-        <p className="mt-6 text-center text-xs text-ink-500">
-          <Link href="/" className="underline-offset-2 hover:underline">
-            Ver catálogo público
-          </Link>
-        </p>
+        <div className="mt-6">
+          <LogosFooterConfig logosIniciales={logosFooter} />
+        </div>
+        <PerfilSeguridadAdmin />
       </main>
-    </>
+    </AdminHeader>
   );
 }

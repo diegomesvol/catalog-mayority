@@ -40,7 +40,7 @@ function GrupoError({ motivo, items }: { motivo: string; items: ErrorImportacion
         type="button"
         onClick={() => setAbierto((v) => !v)}
         aria-expanded={abierto}
-        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
+        className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-ink-100"
       >
         <span className="flex items-center gap-2 text-sm">
           <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-danger-100 px-1.5 text-xs font-semibold text-danger-600">

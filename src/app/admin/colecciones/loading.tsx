@@ -2,8 +2,7 @@ import { AdminHeader } from "@/components/admin/AdminHeader";
 
 export default function CargandoColecciones() {
   return (
-    <>
-      <AdminHeader />
+    <AdminHeader>
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
         <div className="rounded-2xl border border-ink-200 p-4" aria-label="Cargando colecciones" role="status">
           <div className="skeleton h-4 w-40 rounded" />
@@ -14,6 +13,6 @@ export default function CargandoColecciones() {
           </div>
         </div>
       </main>
-    </>
+    </AdminHeader>
   );
 }

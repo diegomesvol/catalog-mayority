@@ -2,10 +2,39 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
-import { Header } from "@/components/ui/Header";
-import { Footer } from "@/components/ui/Footer";
 import { logError } from "@/lib/logger";
 import { useSinConexion } from "@/hooks/useSinConexion";
+
+// Header/Footer reales NO se pueden importar acá (rompe el build: "use
+// client" no puede importar un Server Component async y renderizarlo en su
+// propio JSX — Next intenta empaquetar Header.tsx entero para el cliente,
+// arrastrando lib/supabase.ts, que usa next/headers, solo válido en Server
+// Components). Antes esto pasaba desapercibido; con el logo+título dinámico
+// que Header ahora lee de la config (leerConfigSitio) quedó en evidencia.
+// Mismo motivo por el que este archivo nunca pudo leer ConfigSitio (ver la
+// nota vieja más abajo): acá va una versión mínima y estática, sin sesión
+// ni config — vista de respaldo, no la experiencia real del catálogo.
+function HeaderMinimo() {
+  return (
+    <header className="border-b border-ink-200 bg-paper/90 backdrop-blur supports-[backdrop-filter]:bg-paper/70">
+      <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6">
+        <Link href="/" className="text-base font-semibold tracking-tight text-ink-900">
+          Catálogo Mayorista
+        </Link>
+      </div>
+    </header>
+  );
+}
+
+function FooterMinimo() {
+  return (
+    <footer className="mt-12 border-t border-ink-200 bg-paper-raised">
+      <div className="mx-auto max-w-6xl px-4 py-4 text-center text-xs text-ink-500 sm:px-6">
+        © {new Date().getFullYear()} Calzados Mesvol, C.A.
+      </div>
+    </footer>
+  );
+}
 
 // Límite de error de página. Si esto se dispara ESTANDO SIN CONEXIÓN, el
 // mensaje genérico "Intentar de nuevo" es engañoso: reintentar sin señal va
@@ -24,7 +53,7 @@ export default function ErrorGlobal({ error, reset }: { error: Error & { digest?
 
   return (
     <>
-      <Header />
+      <HeaderMinimo />
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center px-4 py-16 text-center sm:px-6">
         {sinConexion ? (
           <>
@@ -66,7 +95,7 @@ export default function ErrorGlobal({ error, reset }: { error: Error & { digest?
           </>
         )}
       </main>
-      <Footer />
+      <FooterMinimo />
     </>
   );
 }

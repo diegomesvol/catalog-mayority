@@ -67,6 +67,14 @@ export function parsearXLSX(buffer: ArrayBuffer): ArchivoParseado {
   return { filas, encabezados: encabezadosDesdeFilas };
 }
 
+// Único origen remoto soportado: el link de "Publicar en la web" de Google
+// Sheets. Sin este allowlist, obtenerCSVDesdeURL() haría fetch desde el
+// servidor a cualquier host https:// que el admin pegara (SSRF) — un admin
+// de confianza total no es hoy un problema, pero el schema de Supabase ya
+// define roles editor/admin de menor confianza, así que la ruta se restringe
+// al único host que el flujo real necesita.
+const HOSTS_PERMITIDOS = new Set(["docs.google.com"]);
+
 /**
  * Acepta el link de "Publicar en la web" de Google Sheets (formato CSV) y lo
  * trata como una URL remota de CSV. No usa la API de Google ni OAuth.
@@ -80,6 +88,9 @@ export async function obtenerCSVDesdeURL(url: string): Promise<ArchivoParseado> 
   }
   if (urlValida.protocol !== "https:") {
     throw new Error("El link debe ser https.");
+  }
+  if (!HOSTS_PERMITIDOS.has(urlValida.hostname)) {
+    throw new Error("El link debe ser un link de Google Sheets publicado (docs.google.com).");
   }
 
   const respuesta = await fetch(urlValida.toString());

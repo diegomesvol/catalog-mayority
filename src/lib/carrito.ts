@@ -34,6 +34,12 @@ export interface ItemCarrito {
   cantidadPorBulto: number; // pares por bulto (1 en accesorios = venta por unidad)
   esCalzado: boolean;
   cantidad: number; // bultos (calzado) o unidades (accesorios)
+  // Tope real de "cantidad" según el stock del catálogo al momento de
+  // agregar (ver unidadesDisponiblesCurva en lib/producto.ts) — CarritoContext
+  // nunca deja que "cantidad" lo supere. Es un tope de UI, no una reserva:
+  // no vuelve a chequearse contra Blob más adelante, la palabra final la
+  // sigue teniendo el vendedor por WhatsApp (ver el aviso en CarritoDrawer).
+  stockDisponible: number;
 }
 
 export interface DatosComprador {

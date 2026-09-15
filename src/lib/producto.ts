@@ -11,6 +11,22 @@ export function tieneStockCurva(curva: Curva): boolean {
   return tieneStock(curva.tallas);
 }
 
+/**
+ * Cuántos bultos (calzado) o unidades (accesorios) de esta curva se pueden
+ * agregar al carrito sin superar el stock real — el mismo número que usa
+ * ItemCarrito.cantidad. Un bulto consume 1 unidad de CADA talla según su
+ * patrón (porBulto), así que el techo real es la talla más corta, no el
+ * total de la curva. Tallas con porBulto 0 (no forman parte del patrón de
+ * esta curva, ej. "0-1-2-2-1-0") no limitan y se ignoran — dividir por 0
+ * daría NaN. En accesorios (una sola talla "Único", sin porBulto) equivale
+ * directo a su "disponible".
+ */
+export function unidadesDisponiblesCurva(curva: Curva): number {
+  const limitantes = curva.tallas.filter((t) => (t.porBulto ?? 1) > 0);
+  if (limitantes.length === 0) return 0;
+  return Math.min(...limitantes.map((t) => Math.floor(t.disponible / (t.porBulto ?? 1))));
+}
+
 export function tieneStockColor(color: VarianteColor): boolean {
   return color.curvas.some(tieneStockCurva);
 }

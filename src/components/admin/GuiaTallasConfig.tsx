@@ -3,6 +3,7 @@
 import { useEffect, useId, useState } from "react";
 import { toast } from "sonner";
 import { logError } from "@/lib/logger";
+import { fetchJson } from "@/lib/apiCliente";
 import type { GuiaTallas } from "@/lib/types";
 
 // La guía de tallas es fija para todo el calzado del catálogo — no cambia
@@ -49,10 +50,9 @@ export function GuiaTallasConfig() {
     let cancelado = false;
     (async () => {
       try {
-        const resp = await fetch("/api/admin/guia-tallas");
-        const data = (await resp.json()) as { ok: boolean; guia?: GuiaTallas; mensaje?: string };
-        if (!resp.ok || !data.ok || !data.guia) {
-          throw new Error(data.mensaje ?? "No se pudo cargar la guía de tallas actual.");
+        const { resp, data } = await fetchJson<{ ok: boolean; guia?: GuiaTallas; mensaje?: string }>("/api/admin/guia-tallas");
+        if (!resp.ok || !data || !data.ok || !data.guia) {
+          throw new Error(data?.mensaje ?? "No se pudo cargar la guía de tallas actual.");
         }
         if (!cancelado) {
           setInstrucciones({ urlActual: data.guia.instrucciones, editando: false, eliminar: false, link: "", archivo: null });
@@ -81,10 +81,12 @@ export function GuiaTallasConfig() {
       else if (tabla.archivo) formData.set("tablaArchivo", tabla.archivo);
       else if (tabla.link.trim()) formData.set("tablaLink", tabla.link.trim());
 
-      const resp = await fetch("/api/admin/guia-tallas", { method: "POST", body: formData });
-      const data = (await resp.json()) as { ok: boolean; guia?: GuiaTallas; mensaje?: string };
-      if (!resp.ok || !data.ok || !data.guia) {
-        toast.error(data.mensaje ?? "No se pudo guardar la guía de tallas.");
+      const { resp, data } = await fetchJson<{ ok: boolean; guia?: GuiaTallas; mensaje?: string }>("/api/admin/guia-tallas", {
+        method: "POST",
+        body: formData,
+      });
+      if (!resp.ok || !data || !data.ok || !data.guia) {
+        toast.error(data?.mensaje ?? "No se pudo guardar la guía de tallas.");
         return;
       }
       setInstrucciones({ urlActual: data.guia.instrucciones, editando: false, eliminar: false, link: "", archivo: null });

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { subirImagenColeccion } from "@/lib/blob";
 import { logError, pistaBlob } from "@/lib/logger";
+import { crearClienteServidor } from "@/lib/supabase";
+import { requierePermisoEscritura } from "@/lib/auth";
 
 // Endpoint aparte del de /api/admin/colecciones (que guarda la lista en
 // JSON): la portada se sube acá, se recibe la URL pública resultante, y
@@ -11,6 +13,10 @@ const TIPOS_IMAGEN_PERMITIDOS = ["image/png", "image/jpeg", "image/webp"];
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await crearClienteServidor();
+    const permiso = await requierePermisoEscritura(supabase, "operativo");
+    if (!permiso.ok) return permiso.respuesta;
+
     const formData = await request.formData();
     const archivo = formData.get("archivo");
 
@@ -25,8 +31,8 @@ export async function POST(request: NextRequest) {
     const url = await subirImagenColeccion(archivo.name || "portada", bytes, archivo.type);
     return NextResponse.json({ ok: true, url });
   } catch (err) {
-    const mensaje = err instanceof Error ? err.message : "No se pudo subir la imagen.";
-    logError("api/admin/colecciones/imagen POST", err, pistaBlob(mensaje));
-    return NextResponse.json({ ok: false, mensaje }, { status: 500 });
+    const detalle = err instanceof Error ? err.message : String(err);
+    logError("api/admin/colecciones/imagen POST", err, pistaBlob(detalle));
+    return NextResponse.json({ ok: false, mensaje: "No se pudo subir la imagen." }, { status: 500 });
   }
 }

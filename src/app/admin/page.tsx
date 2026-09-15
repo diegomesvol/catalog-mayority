@@ -33,8 +33,7 @@ export default async function PaginaAdminDashboard() {
   }
 
   return (
-    <>
-      <AdminHeader />
+    <AdminHeader>
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
         {datos ? (
           <>
@@ -44,12 +43,7 @@ export default async function PaginaAdminDashboard() {
         ) : (
           <EsqueletoDashboard />
         )}
-        <p className="mt-6 text-center text-xs text-ink-500">
-          <Link href="/" className="underline-offset-2 hover:underline">
-            Ver catálogo público
-          </Link>
-        </p>
       </main>
-    </>
+    </AdminHeader>
   );
 }

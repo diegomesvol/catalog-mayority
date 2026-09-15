@@ -1,0 +1,20 @@
+-- Bug: "permission denied for function es_admin_activo" (42501) al leer
+-- config_sitio/guia_tallas/logos_footer como usuario anónimo (visitante sin
+-- loguear en /cliente, o sin sesión de admin). Causa: esas 3 tablas tienen
+-- una política "for all" que cubre TODOS los comandos, incluido SELECT
+-- (se armó así para arreglar el bug de upsert que evalúa la política de
+-- INSERT aun resolviendo por UPDATE — ver
+-- 20260915090000_fix_rls_upsert_config_sitio_guia_tallas.sql). Postgres
+-- evalúa TODAS las políticas permisivas aplicables a un SELECT, aunque ya
+-- haya una política "publico_lee_*" que por sí sola alcanzaría (qual: true)
+-- — y evaluar el "using (es_admin_activo())" de la política admin exige que
+-- el rol que ejecuta la consulta (acá: anon) tenga permiso de EXECUTE sobre
+-- esa función. anon nunca lo tuvo (es SECURITY DEFINER, solo se le dio
+-- GRANT a "authenticated"), así que cualquier lectura pública tiraba este
+-- error en vez de devolver simplemente los datos.
+--
+-- Fix: dar EXECUTE a anon. Es seguro — es_admin_activo() sin sesión de admin
+-- (el caso de anon) siempre devuelve false, así que esto no habilita ningún
+-- acceso nuevo: solo deja que la política admin se evalúe (y descarte) sin
+-- explotar, cayendo en el OR a la política pública de lectura de siempre.
+grant execute on function es_admin_activo() to anon;
