@@ -238,7 +238,7 @@ export function ConfiguracionForm() {
                 <span className="text-xs text-ink-500">{guardado.logoVisible ? "Visible en login y footer" : "Oculto (archivo conservado)"}</span>
               </div>
             ) : (
-              <span className="text-sm italic text-ink-500">Sin configurar — no se muestra ningún logo</span>
+              <span className="text-sm italic text-warning-600">Sin configurar — no se muestra ningún logo</span>
             )}
           </div>
           <FilaLectura etiqueta="WhatsApp de ventas" valor={guardado.whatsappVentas} placeholder="Sin configurar — usa el número de Vercel" />
