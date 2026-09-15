@@ -6,20 +6,7 @@ import { usePathname } from "next/navigation";
 import { NAV_ADMIN, esItemActivo, itemsVisibles } from "@/lib/adminNav";
 import type { RolAdmin } from "@/lib/auth";
 import { IconoSeccionAdmin } from "./IconoSeccionAdmin";
-import { ConfigSitio } from "@/lib/types";
 
-const VACIA: ConfigSitio = {
-  whatsappVentas: null,
-  descripcionEmpresa: null,
-  rif: null,
-  fondoLoginUrl: null,
-  logoUrl: null,
-  logoVisible: true,
-  razonSocial: "",
-  tituloPlataforma: null,
-};
-
-const [guardado, setGuardado] = useState<ConfigSitio>(VACIA);
 const CLAVE_COLAPSADO = "admin-sidebar-colapsado";
 
 // Sidebar vertical persistente de escritorio (desde "lg") — antes eran tabs
@@ -71,10 +58,7 @@ export function AdminNav({ rol }: { rol: RolAdmin | null }) {
       }`}
     >
       <div className={`flex h-[57px] shrink-0 items-center border-b border-ink-200 ${colapsado ? "justify-center px-0" : "justify-between px-4"}`}>
-        { !colapsado && guardado.logoUrl && (
-          // eslint-disable-next-line @next/next/no-img-element -- URL de Supabase Storage o externa (misma razón que fondoLoginUrl en page.tsx)
-          <img src={guardado.logoUrl} alt={guardado.razonSocial} className="h-11 w-11 shrink-0 object-contain sm:h-12 sm:w-12" />
-        )}
+        
         {!colapsado && <span className="truncate text-base font-semibold tracking-tight text-ink-900">Panel admin</span>}
         <button
           type="button"
