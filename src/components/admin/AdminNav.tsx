@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useId, useLayoutEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ADMIN, esItemActivo, itemsVisibles } from "@/lib/adminNav";
@@ -31,12 +31,12 @@ export function AdminNav({ rol }: { rol: RolAdmin | null }) {
   // costo aceptado a cambio de no tocar la arquitectura de rutas.
   const [colapsado, setColapsado] = useState(false);
 
-  useEffect(() => {
-    async function leerPreferencia() {
-      await Promise.resolve();
-      if (window.localStorage.getItem(CLAVE_COLAPSADO) === "1") setColapsado(true);
-    }
-    leerPreferencia();
+  // useLayoutEffect (no useEffect): corre sincrónico antes de que el
+  // navegador pinte el frame. Con useEffect, cada remount (no hay layout
+  // persistente por encima — ver nota de arriba) pintaba un frame expandido
+  // y recién al siguiente lo colapsaba: el "parpadeo doble" reportado.
+  useLayoutEffect(() => {
+    if (window.localStorage.getItem(CLAVE_COLAPSADO) === "1") setColapsado(true);
   }, []);
 
   function alternar() {
