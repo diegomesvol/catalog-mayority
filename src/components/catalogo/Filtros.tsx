@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import type { OrdenCatalogo } from "@/lib/producto";
+import { DropdownMultiple } from "./DropdownMultiple";
 
 export interface ValorFiltros {
   busqueda: string;
@@ -78,8 +79,6 @@ interface Props {
   onChange: (valor: ValorFiltros) => void;
 }
 
-type CampoMultiple = "marca" | "genero" | "color" | "linea";
-
 function contarActivos(v: ValorFiltros): number {
   return (
     v.marca.length +
@@ -99,13 +98,6 @@ export function Filtros({ marcas, generos, colores, categorias, lineas, tallas, 
 
   function set<K extends keyof ValorFiltros>(campo: K, v: ValorFiltros[K]) {
     onChange({ ...valor, [campo]: v });
-  }
-
-  // Un mismo toggle sirve para Marca/Género/Color/Línea: todos son arrays de
-  // selección múltiple con la misma forma (agregar/quitar un valor).
-  function toggleMultiple(campo: CampoMultiple, opcion: string) {
-    const actual = valor[campo];
-    set(campo, actual.includes(opcion) ? actual.filter((v) => v !== opcion) : [...actual, opcion]);
   }
 
   function toggleTalla(t: string) {
@@ -207,10 +199,13 @@ export function Filtros({ marcas, generos, colores, categorias, lineas, tallas, 
           </div>
         )}
 
-        <GrupoOpciones etiqueta="Marca" seleccionados={valor.marca} opciones={marcas} onToggle={(v) => toggleMultiple("marca", v)} />
-        <GrupoOpciones etiqueta="Género" seleccionados={valor.genero} opciones={generos} onToggle={(v) => toggleMultiple("genero", v)} />
-        <GrupoOpciones etiqueta="Línea" seleccionados={valor.linea} opciones={lineas} onToggle={(v) => toggleMultiple("linea", v)} />
-        <GrupoOpciones etiqueta="Color" seleccionados={valor.color} opciones={colores} onToggle={(v) => toggleMultiple("color", v)} />
+        <div className="flex flex-wrap gap-2">
+          <DropdownMultiple etiqueta="Marca" opciones={marcas} seleccionados={valor.marca} onChange={(v) => set("marca", v)} />
+          <DropdownMultiple etiqueta="Género" opciones={generos} seleccionados={valor.genero} onChange={(v) => set("genero", v)} />
+          <DropdownMultiple etiqueta="Línea" opciones={lineas} seleccionados={valor.linea} onChange={(v) => set("linea", v)} />
+          <DropdownMultiple etiqueta="Color" opciones={colores} seleccionados={valor.color} onChange={(v) => set("color", v)} />
+        </div>
+
         <GrupoOpciones etiqueta="Talla" seleccionados={valor.tallas} opciones={tallas} onToggle={toggleTalla} />
 
         <label
@@ -231,11 +226,10 @@ export function Filtros({ marcas, generos, colores, categorias, lineas, tallas, 
   );
 }
 
-// Grupo de badges de selección múltiple (checkboxes visuales) — mismo look
-// que ya tenía el filtro de Talla, reutilizado ahora también para
-// Marca/Género/Línea/Color en vez del <select> nativo de antes: permite
-// marcar varios valores a la vez sin un menú desplegable por medio. Oculto
-// del todo si no hay opciones (ej. el catálogo no tiene "línea" cargada).
+// Grupo de badges de selección múltiple (checkboxes visuales), usado solo
+// para Talla — Marca/Género/Línea/Color pasaron a DropdownMultiple (menú
+// desplegable) para no ocupar tanto espacio vertical con catálogos de
+// muchas opciones. Oculto del todo si no hay opciones.
 function GrupoOpciones({
   etiqueta,
   seleccionados,
