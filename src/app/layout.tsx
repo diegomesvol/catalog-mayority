@@ -6,6 +6,7 @@ import { CarritoDrawer } from "@/components/carrito/CarritoDrawer";
 import { BusquedaProvider } from "@/components/catalogo/BusquedaContext";
 import { ModoOffline } from "@/components/ui/ModoOffline";
 import { NavegacionOverlay } from "@/components/ui/NavegacionOverlay";
+import { SWRProvider } from "@/components/ui/SWRProvider";
 import { leerConfigSitio } from "@/lib/blob";
 import { sanearNumeroWhatsApp } from "@/lib/carrito";
 import { obtenerClienteActivoCacheado } from "@/lib/sesionCliente";
@@ -71,47 +72,52 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="es" className="h-full antialiased">
       <body className="min-h-full flex flex-col bg-paper text-ink-900">
-        <ModoOffline />
-        {/* Suspense propio (NavegacionOverlay también usa useSearchParams,
-            ver esa nota) — separado del de BusquedaProvider de acá abajo
-            para que un fallback de uno no dependa del otro. */}
-        <Suspense fallback={null}>
-          <NavegacionOverlay />
-        </Suspense>
-        {/* Suspense: BusquedaProvider usa useSearchParams (para sembrar la
-            búsqueda desde "?q="). El fetch de ConfigSitio de arriba ya hace
-            dinámica toda la app (Vercel Blob no se puede cachear estático),
-            así que este boundary ya no evita un prerender estático global —
-            se mantiene igual porque sigue haciendo falta para que
-            useSearchParams no rompa el build. */}
-        <Suspense fallback={null}>
-          <BusquedaProvider>
-            <CarritoProvider
-              numeroWhatsApp={numeroWhatsApp}
-              clienteLogueado={Boolean(clienteActivo)}
-              perfilCompleto={clienteActivo?.perfilCompleto ?? false}
-              datosCliente={
-                clienteActivo
-                  ? { nombre: clienteActivo.nombre, empresa: clienteActivo.empresa, telefono: clienteActivo.telefono, rif: clienteActivo.rif }
-                  : null
-              }
-            >
-              {children}
-              <CarritoDrawer />
-            </CarritoProvider>
-          </BusquedaProvider>
-        </Suspense>
-        <Toaster
-          position="bottom-center"
-          richColors
-          closeButton
-          toastOptions={{
-            classNames: {
-              toast: "rounded-xl border border-ink-200 shadow-lg",
-              title: "text-sm font-medium",
-            },
-          }}
-        />
+        {/* Envuelve toda la app — ver la nota grande en SWRProvider.tsx. Es
+            solo un Context.Provider, sin costo para quien no llama a
+            useSWR(), así que no hace falta acotarlo a una parte del árbol. */}
+        <SWRProvider>
+          <ModoOffline />
+          {/* Suspense propio (NavegacionOverlay también usa useSearchParams,
+              ver esa nota) — separado del de BusquedaProvider de acá abajo
+              para que un fallback de uno no dependa del otro. */}
+          <Suspense fallback={null}>
+            <NavegacionOverlay />
+          </Suspense>
+          {/* Suspense: BusquedaProvider usa useSearchParams (para sembrar la
+              búsqueda desde "?q="). El fetch de ConfigSitio de arriba ya hace
+              dinámica toda la app (Vercel Blob no se puede cachear estático),
+              así que este boundary ya no evita un prerender estático global —
+              se mantiene igual porque sigue haciendo falta para que
+              useSearchParams no rompa el build. */}
+          <Suspense fallback={null}>
+            <BusquedaProvider>
+              <CarritoProvider
+                numeroWhatsApp={numeroWhatsApp}
+                clienteLogueado={Boolean(clienteActivo)}
+                perfilCompleto={clienteActivo?.perfilCompleto ?? false}
+                datosCliente={
+                  clienteActivo
+                    ? { nombre: clienteActivo.nombre, empresa: clienteActivo.empresa, telefono: clienteActivo.telefono, rif: clienteActivo.rif }
+                    : null
+                }
+              >
+                {children}
+                <CarritoDrawer />
+              </CarritoProvider>
+            </BusquedaProvider>
+          </Suspense>
+          <Toaster
+            position="bottom-center"
+            richColors
+            closeButton
+            toastOptions={{
+              classNames: {
+                toast: "rounded-xl border border-ink-200 shadow-lg",
+                title: "text-sm font-medium",
+              },
+            }}
+          />
+        </SWRProvider>
       </body>
     </html>
   );

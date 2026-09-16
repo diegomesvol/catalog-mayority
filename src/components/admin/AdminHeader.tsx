@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import useSWR from "swr";
 import { fetchJson } from "@/lib/apiCliente";
+import { fetcherJson } from "@/lib/swrFetcher";
 import type { PerfilAdmin } from "@/lib/auth";
 import type { ConfigSitio } from "@/lib/types";
 import { AdminNav } from "./AdminNav";
@@ -26,12 +28,13 @@ const TITULO_DEFECTO = "Catálogo Mayorista";
 // localStorage (ver AdminNav) para no "olvidarlo" en cada navegación.
 export function AdminHeader({ children }: { children: ReactNode }) {
   const [perfil, setPerfil] = useState<PerfilAdmin | null>(null);
-  const [tituloPlataforma, setTituloPlataforma] = useState<string | null>(null);
-  const [cargandoTitulo, setCargandoTitulo] = useState(true);
 
   // Solo para el badge de "modo demostración" — el bloqueo real ya lo hace
   // el servidor en cada ruta de escritura (requierePermisoEscritura); esto
-  // es puramente informativo, no una barrera de seguridad.
+  // es puramente informativo, no una barrera de seguridad. A propósito
+  // sigue con fetchJson+useState (no useSWR/localStorage): es la identidad
+  // del admin logueado, no un dato "estático" — no tiene sentido dejarla
+  // persistida en el disco del navegador entre sesiones.
   useEffect(() => {
     fetchJson<{ ok: boolean; perfil?: PerfilAdmin }>("/api/admin/me").then(({ data }) => {
       if (data?.ok && data.perfil) setPerfil(data.perfil);
@@ -43,15 +46,14 @@ export function AdminHeader({ children }: { children: ReactNode }) {
   // client-side porque AdminHeader es un Client Component sin acceso directo
   // a leerConfigSitio(); /api/admin/config GET no requiere sesión de
   // escritura, solo lectura pública de la config.
-  useEffect(() => {
-    fetchJson<{ ok: boolean; config?: ConfigSitio }>("/api/admin/config")
-      .then(({ data }) => {
-        if (data?.ok && data.config) setTituloPlataforma(data.config.tituloPlataforma);
-      })
-      .finally(() => setCargandoTitulo(false));
-  }, []);
-
-  const titulo = tituloPlataforma?.trim() || TITULO_DEFECTO;
+  //
+  // useSWR (no useState+fetch suelto): misma key que pide ClienteHeader.tsx
+  // — dedupe del fetch real entre los dos, y con SWRProvider (ver
+  // app/layout.tsx) el título queda cacheado en localStorage, así que desde
+  // la segunda visita aparece al instante en vez de mostrar siempre el
+  // skeleton de acá abajo.
+  const { data, isLoading: cargandoTitulo } = useSWR<{ ok: boolean; config?: ConfigSitio }>("/api/admin/config", fetcherJson);
+  const titulo = data?.config?.tituloPlataforma?.trim() || TITULO_DEFECTO;
 
   return (
     <div className="flex flex-1">

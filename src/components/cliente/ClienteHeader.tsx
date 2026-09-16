@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
-import { fetchJson } from "@/lib/apiCliente";
+import { type ReactNode } from "react";
+import useSWR from "swr";
+import { fetcherJson } from "@/lib/swrFetcher";
 import type { ConfigSitio } from "@/lib/types";
 import { ClienteNav } from "./ClienteNav";
 
@@ -49,12 +50,14 @@ export function ClienteHeader({ children, perfilCompleto, cliente = null }: Prop
   // dinámico. /api/admin/config GET no requiere sesión (ver esa nota en
   // AdminHeader.tsx). Sirve de ancla visual para que la marca no desaparezca
   // al cruzar del catálogo (sin sesión, sin este shell) a acá (con sesión).
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  useEffect(() => {
-    fetchJson<{ ok: boolean; config?: ConfigSitio }>("/api/admin/config").then(({ data }) => {
-      if (data?.ok && data.config?.logoVisible && data.config.logoUrl) setLogoUrl(data.config.logoUrl);
-    });
-  }, []);
+  //
+  // useSWR (no useState+fetch suelto): misma key ("/api/admin/config") que
+  // pide AdminHeader.tsx — SWR dedupea el fetch real entre los dos si ambos
+  // están montados, y con SWRProvider (ver app/layout.tsx) el logo queda
+  // cacheado en localStorage — en la visita siguiente aparece al instante,
+  // sin esperar el fetch, mientras se revalida solo en segundo plano.
+  const { data } = useSWR<{ ok: boolean; config?: ConfigSitio }>("/api/admin/config", fetcherJson);
+  const logoUrl = data?.config?.logoVisible ? (data.config.logoUrl ?? null) : null;
 
   return (
     <div className="flex flex-1">
