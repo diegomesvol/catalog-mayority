@@ -103,17 +103,6 @@ export function PerfilClienteForm({ perfilInicial }: { perfilInicial: PerfilClie
   return (
     <form onSubmit={onSubmit} noValidate className="mt-6 flex flex-col gap-6">
       <section className="rounded-2xl border border-ink-200 bg-paper-raised p-4 sm:p-5">
-        <h2 className="text-sm font-semibold text-ink-900">Datos de la cuenta</h2>
-        <p className="mt-1 text-xs text-ink-500">Estos datos los configuró el administrador — si necesitás corregirlos, escribile.</p>
-        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-          <Campo etiqueta="Nombre / razón social" valor={perfilInicial.empresa || perfilInicial.nombre} />
-          <Campo etiqueta="Contacto" valor={perfilInicial.nombre} />
-          <Campo etiqueta="Teléfono principal" valor={perfilInicial.telefono} />
-          <Campo etiqueta="RIF / cédula" valor={perfilInicial.rif} />
-        </dl>
-      </section>
-
-      <section className="rounded-2xl border border-ink-200 bg-paper-raised p-4 sm:p-5">
         <h2 className="text-sm font-semibold text-ink-900">Logo del negocio</h2>
         <div className="mt-3 flex items-center gap-4">
           <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-ink-200 bg-paper">
@@ -134,6 +123,17 @@ export function PerfilClienteForm({ perfilInicial }: { perfilInicial: PerfilClie
             />
           </label>
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-ink-200 bg-paper-raised p-4 sm:p-5">
+        <h2 className="text-sm font-semibold text-ink-900">Datos de la cuenta</h2>
+        <p className="mt-1 text-xs text-ink-500">Estos datos los configuró el administrador — si necesitás corregirlos, escribile.</p>
+        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          <Campo etiqueta="Nombre / razón social" valor={perfilInicial.empresa || perfilInicial.nombre} />
+          <Campo etiqueta="Contacto" valor={perfilInicial.nombre} />
+          <Campo etiqueta="Teléfono principal" valor={perfilInicial.telefono} />
+          <Campo etiqueta="RIF / cédula" valor={perfilInicial.rif} />
+        </dl>
       </section>
 
       <section className="rounded-2xl border border-ink-200 bg-paper-raised p-4 sm:p-5">

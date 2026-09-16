@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
-import { iniciales } from "@/lib/format";
 import { useCerrarSesion } from "@/hooks/useCerrarSesion";
+import { AvatarCliente } from "./AvatarCliente";
 
 interface ClienteSesion {
   nombre: string;
@@ -85,26 +85,7 @@ export function CuentaClienteMenu({ cliente, logoTiendaUrl = null }: Props) {
         aria-controls={idMenu}
         className="flex items-center gap-2 rounded-full border border-ink-200 py-1 pl-1 pr-2.5 transition-colors hover:border-ink-900 sm:pr-3.5"
       >
-        <span className="relative shrink-0">
-          {cliente.avatarUrl || logoTiendaUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- foto de Google o logo de la tienda en Supabase Storage, dominio externo
-            <img
-              src={cliente.avatarUrl ?? logoTiendaUrl!}
-              alt=""
-              className={`h-7 w-7 rounded-full object-cover ${cliente.avatarUrl ? "" : "border border-ink-200 bg-white object-contain p-0.5"}`}
-            />
-          ) : (
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-ink-900 text-xs font-semibold text-white">
-              {iniciales(cliente.nombre)}
-            </span>
-          )}
-          {/* Punto "en línea" — confirma sesión activa de un vistazo, sin
-              tener que leer el nombre ni abrir el menú. */}
-          <span
-            className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 border-paper bg-success-600"
-            aria-hidden="true"
-          />
-        </span>
+        <AvatarCliente nombre={cliente.nombre} avatarUrl={cliente.avatarUrl} logoTiendaUrl={logoTiendaUrl} />
         <span className="hidden max-w-[10ch] truncate text-sm font-medium text-ink-900 sm:inline">
           {cliente.nombre.split(" ")[0]}
         </span>
