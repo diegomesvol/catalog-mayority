@@ -3,6 +3,7 @@
 import { useId, useState, type FormEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useBusqueda } from "@/components/catalogo/BusquedaContext";
+import { iniciarNavegacion } from "@/lib/navegacion";
 
 // Buscador global en el navbar: visible en cualquier parte del scroll (el
 // Header ya es sticky), no solo arriba del catálogo.
@@ -49,6 +50,7 @@ export function BuscadorNavbar() {
     if (enCatalogo) return; // ya filtra en vivo, no hace falta confirmar
     const texto = borrador.trim();
     setBusqueda(texto);
+    iniciarNavegacion();
     router.push(texto ? `/?q=${encodeURIComponent(texto)}` : "/");
   }
 

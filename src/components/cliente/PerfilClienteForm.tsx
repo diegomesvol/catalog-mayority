@@ -6,6 +6,7 @@ import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { fetchJson } from "@/lib/apiCliente";
 import { logError } from "@/lib/logger";
+import { iniciarNavegacion } from "@/lib/navegacion";
 import type { PerfilCliente } from "@/lib/clienteAuth";
 import { METODOS_PAGO_ETIQUETA, METODOS_PAGO_OPCIONES, actualizarPerfilClienteSchema, type MetodoPago } from "@/lib/schemas/perfilCliente";
 
@@ -91,7 +92,10 @@ export function PerfilClienteForm({ perfilInicial }: { perfilInicial: PerfilClie
       const eraOnboarding = !perfilInicial.perfilCompleto;
       toast.success(eraOnboarding ? "Perfil completo — ya podés hacer pedidos." : "Perfil actualizado.");
       router.refresh();
-      if (eraOnboarding) router.push("/");
+      if (eraOnboarding) {
+        iniciarNavegacion();
+        router.push("/");
+      }
       setGuardando(false);
     } catch (err) {
       logError("PerfilClienteForm.onSubmit", err, "No se pudo conectar con el servidor.");

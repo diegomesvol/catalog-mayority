@@ -5,6 +5,7 @@ import { CarritoProvider } from "@/components/carrito/CarritoContext";
 import { CarritoDrawer } from "@/components/carrito/CarritoDrawer";
 import { BusquedaProvider } from "@/components/catalogo/BusquedaContext";
 import { ModoOffline } from "@/components/ui/ModoOffline";
+import { NavegacionOverlay } from "@/components/ui/NavegacionOverlay";
 import { leerConfigSitio } from "@/lib/blob";
 import { sanearNumeroWhatsApp } from "@/lib/carrito";
 import { obtenerClienteActivoCacheado } from "@/lib/sesionCliente";
@@ -71,6 +72,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="es" className="h-full antialiased">
       <body className="min-h-full flex flex-col bg-paper text-ink-900">
         <ModoOffline />
+        {/* Suspense propio (NavegacionOverlay también usa useSearchParams,
+            ver esa nota) — separado del de BusquedaProvider de acá abajo
+            para que un fallback de uno no dependa del otro. */}
+        <Suspense fallback={null}>
+          <NavegacionOverlay />
+        </Suspense>
         {/* Suspense: BusquedaProvider usa useSearchParams (para sembrar la
             búsqueda desde "?q="). El fetch de ConfigSitio de arriba ya hace
             dinámica toda la app (Vercel Blob no se puede cachear estático),
