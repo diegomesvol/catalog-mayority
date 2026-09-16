@@ -7,7 +7,7 @@ import { useBloqueoScroll } from "@/hooks/useBloqueoScroll";
 import { useCerrarSesion } from "@/hooks/useCerrarSesion";
 import { useCarrito } from "@/components/carrito/CarritoContext";
 import { iniciales } from "@/lib/format";
-import { DescargaOffline } from "./DescargaOffline";
+import { DescargaOfflineInline } from "./DescargaOfflineInline";
 
 interface ClienteSesion {
   nombre: string;
@@ -25,11 +25,13 @@ interface Props {
 // true solo en el navegador (false en SSR/hidratación) sin setState en un efecto.
 const suscribirNada = () => () => {};
 
-// Botón de hamburguesa + drawer para el header del catálogo público, solo
-// mobile/tablet (por debajo de "sm" — Header.tsx pasa a mostrar todo inline
-// desde ahí, incluida CuentaClienteMenu, y deja de montar esto). Mismo
-// patrón que MenuMovilAdmin.tsx (overlay + panel que desliza, Escape/
-// backdrop cierran, useBloqueoScroll), pero acá el panel entra desde la
+// Botón de hamburguesa + drawer para el header del catálogo público, por
+// debajo de "lg" (Header.tsx pasa a mostrar todo inline desde ahí, incluida
+// CuentaClienteMenu, y deja de montar esto — mismo breakpoint que usa
+// ClienteNav para su sidebar, ver la nota grande en Header.tsx sobre por qué
+// "lg" y no "sm"). Mismo patrón que MenuMovilAdmin.tsx (overlay + panel que
+// desliza, Escape/backdrop cierran, useBloqueoScroll), pero acá el panel
+// entra desde la
 // IZQUIERDA por el mismo motivo que en admin: CarritoDrawer ya entra desde
 // la derecha, y dos paneles con el mismo gesto pero direcciones opuestas
 // evitan confundir "esto es navegación/cuenta" con "esto es tu pedido" —
@@ -101,14 +103,13 @@ export function MenuMovilCatalogo({ cliente, logoTiendaUrl = null }: Props) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [abierto]);
 
-  // Si el viewport pasa a "sm" o más ancho mientras el drawer está abierto
-  // (ej. girar el celular a horizontal, o abrirlo y después achicar/agrandar
-  // la ventana en desktop), el header ya deja de mostrar el botón de
-  // hamburguesa (sm:hidden) pero el panel seguiría técnicamente "abierto" —
-  // se cierra solo para no dejar el scroll del body bloqueado sin ningún
-  // disparador visible para cerrarlo.
+  // Si el viewport pasa a "lg" o más ancho mientras el drawer está abierto
+  // (ej. agrandar la ventana en desktop), el header ya deja de mostrar el
+  // botón de hamburguesa (lg:hidden) pero el panel seguiría técnicamente
+  // "abierto" — se cierra solo para no dejar el scroll del body bloqueado
+  // sin ningún disparador visible para cerrarlo.
   useEffect(() => {
-    const media = window.matchMedia("(min-width: 640px)");
+    const media = window.matchMedia("(min-width: 1024px)");
     function onChange(e: MediaQueryListEvent) {
       if (e.matches) setAbierto(false);
     }
@@ -130,7 +131,7 @@ export function MenuMovilCatalogo({ cliente, logoTiendaUrl = null }: Props) {
         aria-expanded={abierto}
         aria-controls={idPanel}
         aria-label="Abrir menú"
-        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-ink-700 transition-colors hover:bg-ink-100 sm:hidden"
+        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-ink-700 transition-colors hover:bg-ink-100 lg:hidden"
       >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
           <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
@@ -153,7 +154,7 @@ export function MenuMovilCatalogo({ cliente, logoTiendaUrl = null }: Props) {
                 type="button"
                 aria-label="Cerrar menú"
                 onClick={cerrar}
-                className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-[1px] sm:hidden"
+                className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-[1px] lg:hidden"
               />
             )}
 
@@ -166,11 +167,16 @@ export function MenuMovilCatalogo({ cliente, logoTiendaUrl = null }: Props) {
               // de pantalla y el Tab seguían entrando a un diálogo invisible.
               aria-hidden={!abierto}
               inert={!abierto}
-              className={`fixed inset-y-0 left-0 z-50 flex w-full max-w-xs flex-col bg-paper-raised shadow-2xl transition-transform duration-300 sm:hidden ${
+              className={`fixed inset-y-0 left-0 z-50 flex w-full max-w-xs flex-col bg-paper-raised shadow-2xl transition-transform duration-300 lg:hidden ${
                 abierto ? "translate-x-0" : "-translate-x-full"
               }`}
             >
-              <div className="flex items-center justify-between border-b border-ink-200 px-4 py-3.5">
+              {/* py-3 (no py-3.5): misma altura de fila que la barra
+                  compacta de Header.tsx (px-4 py-3 + botón h-11) — para que
+                  el border-b de acá coincida exactamente con el border-b del
+                  header por detrás, en vez de quedar una línea corrida unos
+                  píxeles más abajo (el "efecto de doble borde" reportado). */}
+              <div className="flex items-center justify-between border-b border-ink-200 px-4 py-3">
                 <span className="text-base font-semibold text-ink-900">Menú</span>
                 <button
                   type="button"
@@ -186,7 +192,7 @@ export function MenuMovilCatalogo({ cliente, logoTiendaUrl = null }: Props) {
               </div>
 
               {/* Sesión activa: avatar/iniciales + nombre + email arriba de todo,
-                  mismo dato que muestra CuentaClienteMenu desde "sm" — así el
+                  mismo dato que muestra CuentaClienteMenu desde "lg" — así el
                   drawer también confirma de un vistazo quién está logueado. */}
               {cliente && (
                 <div className="flex items-center gap-3 border-b border-ink-200 px-4 py-3.5">
@@ -303,7 +309,7 @@ export function MenuMovilCatalogo({ cliente, logoTiendaUrl = null }: Props) {
 
                 <div className="mt-2 border-t border-ink-200 px-3 pt-3">
                   <span className="mb-2 block text-xs font-medium text-ink-500">Catálogo sin conexión</span>
-                  <DescargaOffline />
+                  <DescargaOfflineInline />
                 </div>
               </nav>
             </aside>
