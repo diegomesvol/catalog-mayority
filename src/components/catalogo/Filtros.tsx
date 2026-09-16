@@ -9,7 +9,7 @@ export interface ValorFiltros {
   marca: string[];
   genero: string[];
   color: string[];
-  categoria: string; // rubro: CALZADO / ACCESORIOS — sigue siendo único, no hay ambigüedad entre "calzado" y "accesorios" a la vez
+  categoria: string[]; // rubro: CALZADO / ACCESORIOS — ahora admite varios a la vez, mismo criterio que marca/género/línea/color
   linea: string[];
   tallas: string[];
   soloDisponibles: boolean;
@@ -21,7 +21,7 @@ export const FILTROS_VACIOS: ValorFiltros = {
   marca: [],
   genero: [],
   color: [],
-  categoria: "",
+  categoria: [],
   linea: [],
   tallas: [],
   soloDisponibles: false,
@@ -36,16 +36,16 @@ function listaDesdeParam(sp: URLSearchParams, clave: string): string[] {
 // Los filtros se reflejan en la URL (query string) para que: 1) el botón
 // "atrás" del navegador y el link "Volver al catálogo" restauren exactamente
 // lo que se estaba viendo, y 2) el link se pueda compartir ya filtrado.
-// Marca/Género/Color/Línea aceptan más de un valor a la vez — se guardan
-// separados por coma en un único param (ej. "marca=Volpe,Kriza"), mismo
-// criterio que ya usaba "talla" antes de este cambio.
+// Categoría/Marca/Género/Color/Línea aceptan más de un valor a la vez — se
+// guardan separados por coma en un único param (ej. "marca=Volpe,Kriza"),
+// mismo criterio que ya usaba "talla" antes de este cambio.
 export function filtrosDesdeParams(sp: URLSearchParams): ValorFiltros {
   return {
     busqueda: sp.get("q") ?? "",
     marca: listaDesdeParam(sp, "marca"),
     genero: listaDesdeParam(sp, "genero"),
     color: listaDesdeParam(sp, "color"),
-    categoria: sp.get("cat") ?? "",
+    categoria: listaDesdeParam(sp, "cat"),
     linea: listaDesdeParam(sp, "linea"),
     tallas: listaDesdeParam(sp, "talla"),
     soloDisponibles: sp.get("disp") === "1",
@@ -59,7 +59,7 @@ export function paramsDesdeFiltros(filtros: ValorFiltros, pagina: number): URLSe
   if (filtros.marca.length > 0) sp.set("marca", filtros.marca.join(","));
   if (filtros.genero.length > 0) sp.set("genero", filtros.genero.join(","));
   if (filtros.color.length > 0) sp.set("color", filtros.color.join(","));
-  if (filtros.categoria) sp.set("cat", filtros.categoria);
+  if (filtros.categoria.length > 0) sp.set("cat", filtros.categoria.join(","));
   if (filtros.linea.length > 0) sp.set("linea", filtros.linea.join(","));
   if (filtros.tallas.length > 0) sp.set("talla", filtros.tallas.join(","));
   if (filtros.soloDisponibles) sp.set("disp", "1");
@@ -85,7 +85,7 @@ function contarActivos(v: ValorFiltros): number {
     v.genero.length +
     v.color.length +
     v.linea.length +
-    (v.categoria ? 1 : 0) +
+    v.categoria.length +
     (v.tallas.length > 0 ? 1 : 0) +
     (v.soloDisponibles ? 1 : 0)
   );
@@ -112,6 +112,13 @@ export function Filtros({ marcas, generos, colores, categorias, lineas, tallas, 
   if (valor.busqueda.trim()) {
     chips.push({ id: "busqueda", etiqueta: `Buscar: "${valor.busqueda.trim()}"`, quitar: () => set("busqueda", "") });
   }
+  for (const cat of valor.categoria) {
+    chips.push({
+      id: `categoria-${cat}`,
+      etiqueta: `Categoría: ${cat}`,
+      quitar: () => set("categoria", valor.categoria.filter((x) => x !== cat)),
+    });
+  }
   for (const m of valor.marca) {
     chips.push({ id: `marca-${m}`, etiqueta: `Marca: ${m}`, quitar: () => set("marca", valor.marca.filter((x) => x !== m)) });
   }
@@ -123,9 +130,6 @@ export function Filtros({ marcas, generos, colores, categorias, lineas, tallas, 
   }
   for (const c of valor.color) {
     chips.push({ id: `color-${c}`, etiqueta: `Color: ${c}`, quitar: () => set("color", valor.color.filter((x) => x !== c)) });
-  }
-  if (valor.categoria) {
-    chips.push({ id: "categoria", etiqueta: `Categoría: ${valor.categoria}`, quitar: () => set("categoria", "") });
   }
   if (valor.tallas.length > 0) {
     chips.push({
@@ -187,19 +191,16 @@ export function Filtros({ marcas, generos, colores, categorias, lineas, tallas, 
       )}
 
       <div id={idPanel} className={`${abierto ? "flex" : "hidden"} flex-col gap-4 lg:flex`}>
-        {categorias.length > 1 && (
-          <div className="max-w-xs">
-            <Select
-              etiqueta="Categoría"
-              value={valor.categoria}
-              onChange={(v) => set("categoria", v)}
-              opciones={categorias}
-              todas="Calzado y accesorios"
-            />
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2">
+        {/* Los 5 filtros unificados en un mismo look (dropdown + checkboxes):
+            grilla simétrica que reparte el ancho en partes iguales entre
+            columnas — 2 por fila en mobile, 3 en tablet, las 5 en una sola
+            fila en desktop ("lg"). Si el catálogo solo tiene un rubro
+            (categorías.length <= 1) ese dropdown ni se muestra — sin eso
+            para elegir, no tendría sentido ofrecerlo. */}
+        <div className="mx-auto grid w-full grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          {categorias.length > 1 && (
+            <DropdownMultiple etiqueta="Categoría" opciones={categorias} seleccionados={valor.categoria} onChange={(v) => set("categoria", v)} />
+          )}
           <DropdownMultiple etiqueta="Marca" opciones={marcas} seleccionados={valor.marca} onChange={(v) => set("marca", v)} />
           <DropdownMultiple etiqueta="Género" opciones={generos} seleccionados={valor.genero} onChange={(v) => set("genero", v)} />
           <DropdownMultiple etiqueta="Línea" opciones={lineas} seleccionados={valor.linea} onChange={(v) => set("linea", v)} />
@@ -227,7 +228,7 @@ export function Filtros({ marcas, generos, colores, categorias, lineas, tallas, 
 }
 
 // Grupo de badges de selección múltiple (checkboxes visuales), usado solo
-// para Talla — Marca/Género/Línea/Color pasaron a DropdownMultiple (menú
+// para Talla — el resto de los filtros pasaron a DropdownMultiple (menú
 // desplegable) para no ocupar tanto espacio vertical con catálogos de
 // muchas opciones. Oculto del todo si no hay opciones.
 function GrupoOpciones({
@@ -266,44 +267,6 @@ function GrupoOpciones({
           );
         })}
       </div>
-    </div>
-  );
-}
-
-function Select({
-  etiqueta,
-  value,
-  onChange,
-  opciones,
-  todas,
-}: {
-  etiqueta: string;
-  value: string;
-  onChange: (v: string) => void;
-  opciones: string[];
-  todas: string;
-}) {
-  const id = useId();
-  return (
-    <div>
-      <label htmlFor={id} className="mb-1 block text-xs font-medium text-ink-500">
-        {etiqueta}
-      </label>
-      <select
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={`w-full rounded-lg border px-3 py-2 text-sm focus:border-accent-600 ${
-          value ? "border-ink-900 bg-ink-900 font-medium text-white" : "border-ink-200 bg-paper-raised text-ink-900"
-        }`}
-      >
-        <option value="">{todas}</option>
-        {opciones.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
     </div>
   );
 }

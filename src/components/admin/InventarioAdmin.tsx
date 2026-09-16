@@ -3,12 +3,11 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { ProductoInventario } from "@/lib/blob";
-import { estadoStockProducto, resumenInventario, umbralProducto, type EstadoStock } from "@/lib/inventario";
+import { estadoStockProducto, umbralProducto, type EstadoStock } from "@/lib/inventario";
 import { stockTotalProducto, tallasDelProducto } from "@/lib/producto";
 import { exportarInventarioExcel } from "@/lib/inventarioExportar";
 import { fetchJson } from "@/lib/apiCliente";
 import { logError } from "@/lib/logger";
-import { InventarioKpis } from "./InventarioKpis";
 import { InventarioFiltrosBarra } from "./InventarioFiltrosBarra";
 import { InventarioBulkBarra } from "./InventarioBulkBarra";
 import { InventarioTabla, type ColumnaOrdenInventario, type DireccionOrden, type FilaInventario } from "./InventarioTabla";
@@ -67,10 +66,6 @@ export function InventarioAdmin({ productosIniciales, umbralesIniciales }: Props
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [productoEditando, setProductoEditando] = useState<ProductoInventario | null>(null);
   const [agotandoMasivo, setAgotandoMasivo] = useState(false);
-
-  // KPIs sobre el inventario COMPLETO, no sobre lo filtrado — un resumen que
-  // cambiara con cada filtro dejaría de ser un resumen general del negocio.
-  const resumen = useMemo(() => resumenInventario(productos, umbrales), [productos, umbrales]);
 
   const marcas = useMemo(() => Array.from(new Set(productos.map((p) => p.marca))).sort((a, b) => a.localeCompare(b, "es")), [productos]);
   const lineas = useMemo(
@@ -226,9 +221,11 @@ export function InventarioAdmin({ productosIniciales, umbralesIniciales }: Props
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <InventarioKpis resumen={resumen} />
-
+    // "min-w-0": mismo motivo que en InventarioFiltrosBarra.tsx — este es un
+    // flex item de la columna que arma page.tsx/AdminHeader, y sin esto un
+    // hijo ancho (la tabla, un <select> con opción larga) puede empujarlo
+    // más ancho que la pantalla en vez de scrollear solo puntualmente.
+    <div className="flex min-w-0 flex-col gap-5">
       <InventarioFiltrosBarra
         busqueda={busqueda}
         onBusqueda={(v) => {

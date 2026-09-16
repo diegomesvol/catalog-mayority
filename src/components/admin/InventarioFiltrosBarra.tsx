@@ -47,8 +47,15 @@ export function InventarioFiltrosBarra({
   onExportarTodo,
 }: Props) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-      <div className="flex-1 sm:min-w-[220px]">
+    // "min-w-0": sin esto, un <select> con una opción de texto largo (una
+    // marca o línea con nombre extenso) no se achica por debajo de su
+    // contenido como flex item y empuja la fila entera más ancha que la
+    // pantalla — mismo tipo de fuga que soluciona min-w-0 en AdminHeader.tsx,
+    // pero acá hace falta explícito porque un <select> no es un contenedor
+    // con overflow propio (no se beneficia del min-width:auto→0 automático
+    // que sí aplica a un div con overflow-x-auto, como el de la tabla).
+    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+      <div className="min-w-0 flex-1 sm:min-w-[220px]">
         <label htmlFor="inventario-busqueda" className="mb-1 block text-xs font-medium text-ink-500">
           Buscar
         </label>
@@ -93,7 +100,7 @@ function Select({
 }) {
   const id = useId();
   return (
-    <div>
+    <div className="min-w-0 max-w-full">
       <label htmlFor={id} className="mb-1 block text-xs font-medium text-ink-500">
         {etiqueta}
       </label>
@@ -101,7 +108,7 @@ function Select({
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-ink-200 bg-paper-raised px-3 py-2 text-sm text-ink-900 focus:border-accent-600"
+        className="w-full max-w-full truncate rounded-lg border border-ink-200 bg-paper-raised px-3 py-2 text-sm text-ink-900 focus:border-accent-600"
       >
         {opciones.map((o) => (
           <option key={o.valor || "todos"} value={o.valor}>
@@ -128,7 +135,7 @@ function SelectSimple({
 }) {
   const id = useId();
   return (
-    <div>
+    <div className="min-w-0 max-w-full">
       <label htmlFor={id} className="mb-1 block text-xs font-medium text-ink-500">
         {etiqueta}
       </label>
@@ -136,7 +143,7 @@ function SelectSimple({
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-ink-200 bg-paper-raised px-3 py-2 text-sm text-ink-900 focus:border-accent-600"
+        className="w-full max-w-full truncate rounded-lg border border-ink-200 bg-paper-raised px-3 py-2 text-sm text-ink-900 focus:border-accent-600"
       >
         <option value="">{todas}</option>
         {opciones.map((o) => (

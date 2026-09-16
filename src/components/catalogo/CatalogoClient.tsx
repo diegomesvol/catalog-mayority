@@ -40,7 +40,7 @@ function coincideConFiltros(p: Producto, filtros: ValorFiltros, omitir?: CampoFi
   if (omitir !== "marca" && filtros.marca.length > 0 && !filtros.marca.includes(p.marca)) return false;
   if (omitir !== "genero" && filtros.genero.length > 0 && !filtros.genero.includes(p.genero)) return false;
   if (omitir !== "color" && filtros.color.length > 0 && !p.colores.some((c) => filtros.color.includes(c.color))) return false;
-  if (omitir !== "categoria" && filtros.categoria && p.rubro !== filtros.categoria) return false;
+  if (omitir !== "categoria" && filtros.categoria.length > 0 && !filtros.categoria.includes(p.rubro)) return false;
   if (omitir !== "linea" && filtros.linea.length > 0 && !(p.linea && filtros.linea.includes(p.linea))) return false;
   if (omitir !== "tallas" && filtros.tallas.length > 0) {
     const tallasProducto = tallasDelProducto(p);
@@ -64,7 +64,7 @@ function opcionesContextuales(
   filtros: ValorFiltros,
   campo: CampoFiltro,
   extraer: (p: Producto) => (string | undefined)[],
-  valorActual: string | string[],
+  valorActual: string[],
 ): string[] {
   const conjunto = new Set(
     productos
@@ -72,8 +72,7 @@ function opcionesContextuales(
       .flatMap(extraer)
       .filter((v): v is string => Boolean(v)),
   );
-  const actuales = Array.isArray(valorActual) ? valorActual : valorActual ? [valorActual] : [];
-  for (const v of actuales) conjunto.add(v);
+  for (const v of valorActual) conjunto.add(v);
   return Array.from(conjunto).sort((a, b) => a.localeCompare(b, "es"));
 }
 
@@ -88,7 +87,7 @@ export function CatalogoClient({ productos }: { productos: Producto[] }) {
       desdeUrl.marca.length > 0 ||
       desdeUrl.genero.length > 0 ||
       desdeUrl.color.length > 0 ||
-      Boolean(desdeUrl.categoria) ||
+      desdeUrl.categoria.length > 0 ||
       desdeUrl.linea.length > 0 ||
       desdeUrl.tallas.length > 0 ||
       desdeUrl.soloDisponibles ||
@@ -99,7 +98,17 @@ export function CatalogoClient({ productos }: { productos: Producto[] }) {
     // búsqueda entre visitas (ver lib/filtrosCatalogoLocal.ts).
     if (hayFiltroEnUrl) return desdeUrl;
     const guardados = leerFiltrosGuardados();
-    return guardados ? { ...FILTROS_VACIOS, ...guardados } : desdeUrl;
+    if (!guardados) return desdeUrl;
+    // "categoria" era un único string antes de unificar los 5 filtros como
+    // arrays — un navegador con localStorage viejo (de antes de este
+    // cambio) puede traer ese shape guardado; se normaliza acá para no
+    // romper .length/.includes de golpe en el resto del componente.
+    const categoriaGuardada = Array.isArray(guardados.categoria)
+      ? guardados.categoria
+      : guardados.categoria
+        ? [guardados.categoria as unknown as string]
+        : [];
+    return { ...FILTROS_VACIOS, ...guardados, categoria: categoriaGuardada };
   });
   const [pagina, setPagina] = useState(() => {
     const p = Number(searchParamsIniciales.get("pagina"));

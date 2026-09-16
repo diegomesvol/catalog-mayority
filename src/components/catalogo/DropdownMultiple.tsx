@@ -9,11 +9,12 @@ interface Props {
   onChange: (nuevos: string[]) => void;
 }
 
-// Dropdown de selección múltiple para Marca/Género/Línea/Color del catálogo
-// público — reemplaza los grupos de badges de antes (Filtros.tsx) por un
-// menú desplegable con checkboxes. Abrir/cerrar sigue el mismo patrón que
-// CuentaClienteMenu (click afuera + Escape). Oculto del todo si no hay
-// opciones (ej. el catálogo no tiene "línea" cargada), igual que antes.
+// Dropdown de selección múltiple para Categoría/Marca/Género/Línea/Color del
+// catálogo público — reemplaza los grupos de badges/el <select> nativo de
+// antes (Filtros.tsx) por un menú desplegable con checkboxes. Abrir/cerrar
+// sigue el mismo patrón que CuentaClienteMenu (click afuera + Escape).
+// Oculto del todo si no hay opciones (ej. el catálogo no tiene "línea"
+// cargada), igual que antes.
 export function DropdownMultiple({ etiqueta, opciones, seleccionados, onChange }: Props) {
   const [abierto, setAbierto] = useState(false);
   const contenedorRef = useRef<HTMLDivElement>(null);
@@ -44,7 +45,11 @@ export function DropdownMultiple({ etiqueta, opciones, seleccionados, onChange }
   const activos = seleccionados.length;
 
   return (
-    <div ref={contenedorRef} className="relative">
+    <div ref={contenedorRef} className="relative w-full">
+      {/* "w-full justify-between": a diferencia de la versión anterior (ancho
+          según el texto), acá el botón se estira a lo que le dé la grilla
+          simétrica de Filtros.tsx — las 5 columnas (Categoría/Marca/Género/
+          Línea/Color) quedan del mismo ancho entre sí. */}
       <button
         type="button"
         onClick={() => setAbierto((v) => !v)}
@@ -52,14 +57,16 @@ export function DropdownMultiple({ etiqueta, opciones, seleccionados, onChange }
         aria-expanded={abierto}
         aria-controls={idPanel}
         className={[
-          "flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+          "flex w-full items-center justify-between gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
           activos > 0
             ? "border-ink-900 bg-ink-900 text-white"
             : "border-ink-200 bg-paper-raised text-ink-900 hover:border-ink-900",
         ].join(" ")}
       >
-        {etiqueta}
-        {activos > 0 && <span aria-hidden="true">({activos})</span>}
+        <span className="flex min-w-0 items-center gap-1 truncate">
+          <span className="truncate">{etiqueta}</span>
+          {activos > 0 && <span aria-hidden="true">({activos})</span>}
+        </span>
         <svg
           width="14"
           height="14"
@@ -68,7 +75,7 @@ export function DropdownMultiple({ etiqueta, opciones, seleccionados, onChange }
           stroke="currentColor"
           strokeWidth="2"
           aria-hidden="true"
-          className={`transition-transform ${abierto ? "rotate-180" : ""}`}
+          className={`shrink-0 transition-transform ${abierto ? "rotate-180" : ""}`}
         >
           <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>

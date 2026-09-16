@@ -848,7 +848,14 @@ export async function agotarTallasMasivo(tallaIds: string[]): Promise<void> {
 export async function leerUmbralesStock(): Promise<Record<string, number>> {
   const supabase = await crearClienteServidor();
   const { data, error } = await supabase.from("umbrales_stock_producto").select("producto_slug, umbral");
-  if (error) throw error;
+  if (error) {
+    // No revienta la página de inventario si la migración de esta tabla
+    // todavía no corrió (o cualquier otro error de lectura): cada producto
+    // simplemente cae al umbral por defecto (ver UMBRAL_STOCK_DEFECTO en
+    // lib/inventario.ts) hasta que el admin guarde uno propio.
+    logError("lib/blob.leerUmbralesStock", error);
+    return {};
+  }
   const mapa: Record<string, number> = {};
   for (const fila of data ?? []) mapa[fila.producto_slug as string] = fila.umbral as number;
   return mapa;

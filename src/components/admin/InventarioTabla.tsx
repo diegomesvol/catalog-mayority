@@ -38,7 +38,7 @@ interface Props {
 // en mobile scrollea horizontal en vez de aplastar el contenido ilegible.
 export function InventarioTabla({ filas, seleccionados, todosSeleccionados, orden, onToggleFila, onToggleTodos, onOrdenar, onEditar }: Props) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-ink-200">
+    <div className="min-w-0 overflow-x-auto rounded-xl border border-ink-200">
       <table className="w-full min-w-[1100px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-ink-200 bg-ink-100 text-left text-xs font-medium uppercase tracking-wide text-ink-500">

@@ -43,27 +43,3 @@ export function valorInventarioProducto(producto: Producto): number {
   }, 0);
 }
 
-export interface ResumenInventario {
-  totalProductos: number;
-  unidadesTotales: number;
-  // Cuenta "bajo stock" + "agotado" — ambos son productos que necesitan
-  // atención del admin, a diferencia de la tabla (que sí distingue los dos
-  // estados con badges separados).
-  alertasBajoStock: number;
-  valorTotalInventario: number;
-}
-
-export function resumenInventario(productos: Producto[], umbrales: Record<string, number>): ResumenInventario {
-  let unidadesTotales = 0;
-  let alertasBajoStock = 0;
-  let valorTotalInventario = 0;
-
-  for (const p of productos) {
-    unidadesTotales += stockTotalProducto(p);
-    valorTotalInventario += valorInventarioProducto(p);
-    const estado = estadoStockProducto(p, umbrales);
-    if (estado !== "disponible") alertasBajoStock += 1;
-  }
-
-  return { totalProductos: productos.length, unidadesTotales, alertasBajoStock, valorTotalInventario };
-}
