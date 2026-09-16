@@ -1,21 +1,46 @@
-// Señal global de "arrancó una navegación", para NavegacionOverlay.tsx (el
-// overlay de pantalla completa montado una sola vez en app/layout.tsx).
-// Mismo patrón que registrarAvisoDemo en lib/apiCliente.ts: un único
-// callback registrado por el componente que vive montado siempre, en vez de
-// Context — no hace falta re-renderizar un árbol entero por esto.
-//
-// NavegacionOverlay ya detecta solo los clicks en cualquier <a href> del
-// documento (no hace falta llamar a esto para <Link/> normales) — esto es
-// solo para las pocas navegaciones que se disparan por código, con
-// router.push, sin pasar por un <a> (ver BuscadorNavbar y
-// PerfilClienteForm).
-type ManejadorInicioNavegacion = () => void;
-let manejador: ManejadorInicioNavegacion | null = null;
+"use client";
 
-export function registrarInicioNavegacion(m: ManejadorInicioNavegacion | null) {
-  manejador = m;
+import { useSyncExternalStore } from "react";
+
+// Store mínimo (sin Context, mismo criterio que registrarAvisoDemo en
+// lib/apiCliente.ts) para la señal global de "hay una navegación en curso".
+// El único "driver" real — quien decide cuándo prende/apaga esto mirando
+// clicks en <a href>, cambios de pathname/searchParams y el timeout de
+// seguridad — sigue siendo NavegacionOverlay.tsx. Este archivo solo guarda
+// el valor compartido para que OTROS consumidores (FaviconAnimado.tsx) lo
+// lean sin duplicar esa lógica de detección.
+type Escuchador = () => void;
+
+let pendiente = false;
+const escuchadores = new Set<Escuchador>();
+
+export function fijarNavegacionPendiente(valor: boolean) {
+  if (pendiente === valor) return;
+  pendiente = valor;
+  escuchadores.forEach((fn) => fn());
 }
 
+// Para las pocas navegaciones que se disparan por código, sin pasar por un
+// <a> (buscador al presionar Enter, redirect tras completar el onboarding
+// del perfil) — ver BuscadorNavbar.tsx y PerfilClienteForm.tsx. Los clicks
+// en <a href> normales ya los detecta NavegacionOverlay solo.
 export function iniciarNavegacion() {
-  manejador?.();
+  fijarNavegacionPendiente(true);
+}
+
+function suscribir(fn: Escuchador) {
+  escuchadores.add(fn);
+  return () => escuchadores.delete(fn);
+}
+
+function obtenerSnapshot() {
+  return pendiente;
+}
+
+function obtenerSnapshotServidor() {
+  return false;
+}
+
+export function useNavegacionPendiente(): boolean {
+  return useSyncExternalStore(suscribir, obtenerSnapshot, obtenerSnapshotServidor);
 }

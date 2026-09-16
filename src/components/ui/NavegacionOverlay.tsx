@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { registrarInicioNavegacion } from "@/lib/navegacion";
+import { fijarNavegacionPendiente, useNavegacionPendiente } from "@/lib/navegacion";
 
 // Overlay global de "navegando…" — montado una sola vez en app/layout.tsx
 // (envuelto en su propio <Suspense>, ver esa nota) para que cubra TODA la
@@ -26,24 +26,25 @@ import { registrarInicioNavegacion } from "@/lib/navegacion";
 // termina sin navegar de verdad (usuario canceló, error de red antes de que
 // Next dispare el cambio de ruta), sin esto el overlay quedaría pegado a
 // pantalla completa para siempre.
+//
+// Este componente es el único "driver": el que decide cuándo prende/apaga
+// la señal (fijarNavegacionPendiente, en lib/navegacion.ts). Otros
+// consumidores de la misma señal (FaviconAnimado.tsx) solo la LEEN con
+// useNavegacionPendiente — así no hay dos listeners de click ni dos efectos
+// de pathname/searchParams duplicando el mismo trabajo.
 export function NavegacionOverlay() {
-  const [pendiente, setPendiente] = useState(false);
+  const pendiente = useNavegacionPendiente();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  useEffect(() => {
-    registrarInicioNavegacion(() => setPendiente(true));
-    return () => registrarInicioNavegacion(null);
-  }, []);
-
   // eslint-disable-next-line react-hooks/exhaustive-deps -- se apaga a propósito con CUALQUIER cambio de pathname/searchParams, no depende de más nada
   useEffect(() => {
-    setPendiente(false);
+    fijarNavegacionPendiente(false);
   }, [pathname, searchParams]);
 
   useEffect(() => {
     if (!pendiente) return;
-    const timeout = window.setTimeout(() => setPendiente(false), 8000);
+    const timeout = window.setTimeout(() => fijarNavegacionPendiente(false), 8000);
     return () => window.clearTimeout(timeout);
   }, [pendiente]);
 
@@ -64,7 +65,7 @@ export function NavegacionOverlay() {
       }
       if (url.origin !== window.location.origin) return;
       if (url.pathname === window.location.pathname && url.search === window.location.search) return;
-      setPendiente(true);
+      fijarNavegacionPendiente(true);
     }
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);

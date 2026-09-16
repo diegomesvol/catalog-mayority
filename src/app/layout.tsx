@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import { CarritoProvider } from "@/components/carrito/CarritoContext";
 import { CarritoDrawer } from "@/components/carrito/CarritoDrawer";
 import { BusquedaProvider } from "@/components/catalogo/BusquedaContext";
+import { FaviconAnimado } from "@/components/ui/FaviconAnimado";
 import { ModoOffline } from "@/components/ui/ModoOffline";
 import { NavegacionOverlay } from "@/components/ui/NavegacionOverlay";
 import { SWRProvider } from "@/components/ui/SWRProvider";
@@ -83,6 +84,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <Suspense fallback={null}>
             <NavegacionOverlay />
           </Suspense>
+          {/* FaviconAnimado no usa useSearchParams (solo lee la señal
+              compartida de lib/navegacion.ts), así que no necesita su propio
+              Suspense — pero sí depende de que NavegacionOverlay esté
+              montado (es quien prende/apaga la señal), ver esa nota. */}
+          <FaviconAnimado />
           {/* Suspense: BusquedaProvider usa useSearchParams (para sembrar la
               búsqueda desde "?q="). El fetch de ConfigSitio de arriba ya hace
               dinámica toda la app (Vercel Blob no se puede cachear estático),
