@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { fetchJson } from "@/lib/apiCliente";
+import type { ConfigSitio } from "@/lib/types";
 import { ClienteNav, ClienteNavMovil } from "./ClienteNav";
 
 // Shell del portal de cliente — mismo patrón que AdminHeader.tsx (sidebar +
@@ -19,13 +21,31 @@ import { ClienteNav, ClienteNavMovil } from "./ClienteNav";
 // acá ya no tiene nada que mostrar en desktop (ClienteNav ya repite "Mi
 // cuenta" en su propio encabezado) — queda lg:hidden, solo el título mobile.
 export function ClienteHeader({ children, perfilCompleto }: { children: ReactNode; perfilCompleto: boolean }) {
+  // Logo de marca — mismo dato que usa Header.tsx del catálogo público
+  // (config.logoVisible/config.logoUrl), pedido acá client-side porque
+  // ClienteHeader es un Client Component sin acceso directo a
+  // leerConfigSitio(); mismo patrón que AdminHeader.tsx usa para su título
+  // dinámico. /api/admin/config GET no requiere sesión (ver esa nota en
+  // AdminHeader.tsx). Sirve de ancla visual para que la marca no desaparezca
+  // al cruzar del catálogo (topbar) a acá (sidebar).
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  useEffect(() => {
+    fetchJson<{ ok: boolean; config?: ConfigSitio }>("/api/admin/config").then(({ data }) => {
+      if (data?.ok && data.config?.logoVisible && data.config.logoUrl) setLogoUrl(data.config.logoUrl);
+    });
+  }, []);
+
   return (
     <div className="flex flex-1">
-      <ClienteNav />
+      <ClienteNav logoUrl={logoUrl} />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
         <header className="flex h-[57px] shrink-0 items-center border-b border-ink-200 bg-paper-raised lg:hidden">
-          <div className="mx-auto flex w-full max-w-3xl items-center px-4 sm:px-6">
+          <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 sm:px-6">
+            {logoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element -- URL de Supabase Storage, no un dominio fijo conocido de antemano
+              <img src={logoUrl} alt="" className="h-6 w-6 shrink-0 rounded object-contain" />
+            )}
             <span className="truncate text-base font-semibold tracking-tight text-ink-900">Mi cuenta</span>
           </div>
         </header>

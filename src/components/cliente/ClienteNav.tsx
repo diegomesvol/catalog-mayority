@@ -7,23 +7,25 @@ import { BotonCerrarSesion } from "@/components/ui/BotonCerrarSesion";
 
 // Nav del portal de cliente — mismo espíritu que AdminNav (sidebar fijo
 // desde "lg", ver esa nota grande) pero deliberadamente más simple: acá son
-// 3 secciones fijas, nunca cambian según rol, así que no hace falta ni el
+// 2 secciones fijas, nunca cambian según rol, así que no hace falta ni el
 // array de configuración (lib/adminNav.ts) ni el colapsado/localStorage.
+// "Catálogo" NO es un ítem más acá — vive aparte, en el pie del sidebar
+// (VolverCatalogo, ver más abajo), mismo criterio que "Ver catálogo
+// público" en AdminNav: es una salida, no una sección de gestión, así que
+// no comparte peso visual con las de arriba.
 const ITEMS = [
-  { href: "/", etiqueta: "Catálogo", icono: <IconoCatalogo /> },
   { href: "/cliente", etiqueta: "Mis pedidos", icono: <IconoPedidos /> },
   { href: "/cliente/perfil", etiqueta: "Mi perfil", icono: <IconoPerfil /> },
 ] as const;
 
 function esItemActivo(href: string, pathname: string): boolean {
-  if (href === "/") return pathname === "/";
   // "/cliente" no debe marcarse activo también para "/cliente/perfil" —
   // match exacto para esos dos, salvo pedidos/[id] que cuelga de "/cliente".
   if (href === "/cliente") return pathname === "/cliente" || pathname.startsWith("/cliente/pedidos");
   return pathname === href;
 }
 
-export function ClienteNav() {
+export function ClienteNav({ logoUrl = null }: { logoUrl?: string | null }) {
   const pathname = usePathname();
   // "Cerrar sesión" vivía en ClienteHeader (barra superior) — se movió al
   // pie del sidebar, mismo pedido que en el panel admin (ver AdminNav).
@@ -34,7 +36,11 @@ export function ClienteNav() {
       aria-label="Navegación de mi cuenta"
       className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-ink-200 bg-paper-raised lg:flex"
     >
-      <div className="flex h-[57px] shrink-0 items-center border-b border-ink-200 px-4">
+      <div className="flex h-[57px] shrink-0 items-center gap-2 border-b border-ink-200 px-4">
+        {logoUrl && (
+          // eslint-disable-next-line @next/next/no-img-element -- URL de Supabase Storage, no un dominio fijo conocido de antemano
+          <img src={logoUrl} alt="" className="h-6 w-6 shrink-0 rounded object-contain" />
+        )}
         <span className="truncate text-base font-semibold tracking-tight text-ink-900">Mi cuenta</span>
       </div>
       <nav className="flex flex-1 flex-col gap-1 p-2" aria-label="Secciones de mi cuenta">
@@ -56,7 +62,8 @@ export function ClienteNav() {
         })}
       </nav>
 
-      <div className="border-t border-ink-200 p-2">
+      <div className="flex flex-col gap-1 border-t border-ink-200 p-2">
+        <VolverCatalogo />
         <BotonCerrarSesion saliendo={saliendo} onClick={salir} />
       </div>
     </aside>
@@ -91,8 +98,43 @@ export function ClienteNavMovil() {
         );
       })}
       <div className="ml-auto h-6 w-px shrink-0 bg-ink-200" aria-hidden="true" />
+      <VolverCatalogoMovil />
       <BotonCerrarSesion saliendo={saliendo} onClick={salir} redondo />
     </nav>
+  );
+}
+
+// Acceso a "volver al catálogo" — mismo criterio que VerCatalogoPublico en
+// el panel admin (acción de salida, separada visualmente de las secciones
+// de gestión, no un tab más de ITEMS) pero navegación normal, sin
+// target="_blank": acá es "volver", no "espiar sin perder el lugar" como en
+// el panel admin.
+function VolverCatalogo() {
+  return (
+    <Link
+      href="/"
+      aria-label="Volver al catálogo"
+      className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-1"
+    >
+      <IconoCatalogo />
+      <span className="truncate">Volver al catálogo</span>
+    </Link>
+  );
+}
+
+// Misma acción que VolverCatalogo, versión ícono-solo para la barra
+// horizontal mobile (mismo criterio que el BotonCerrarSesion "redondo" de
+// al lado) — no hay espacio para el texto en este layout.
+function VolverCatalogoMovil() {
+  return (
+    <Link
+      href="/"
+      aria-label="Volver al catálogo"
+      title="Volver al catálogo"
+      className="flex shrink-0 items-center justify-center rounded-full p-2 text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-1"
+    >
+      <IconoCatalogo />
+    </Link>
   );
 }
 
