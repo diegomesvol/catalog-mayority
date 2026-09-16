@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardarConfigSitio, leerConfigSitio } from "@/lib/blob";
+import { eliminarImagenPublica, guardarConfigSitio, leerConfigSitio } from "@/lib/blob";
 import type { ConfigSitio } from "@/lib/types";
 import { logError, pistaBlob } from "@/lib/logger";
 import { configSitioSchema } from "@/lib/schemas/configSitio";
@@ -50,7 +50,15 @@ export async function POST(request: NextRequest) {
       tituloPlataforma: parsed.data.tituloPlataforma || null,
     };
 
+    // Config vieja ANTES de pisarla — es lo único que permite saber si
+    // logoUrl/fondoLoginUrl cambiaron y, si cambiaron, borrar el archivo
+    // viejo del bucket (ConfiguracionForm sube la imagen enseguida a un
+    // endpoint aparte; sin este borrado, cada reemplazo dejaba el archivo
+    // anterior huérfano en Storage para siempre).
+    const anterior = await leerConfigSitio();
     await guardarConfigSitio(config);
+    if (anterior.logoUrl && anterior.logoUrl !== config.logoUrl) void eliminarImagenPublica(anterior.logoUrl);
+    if (anterior.fondoLoginUrl && anterior.fondoLoginUrl !== config.fondoLoginUrl) void eliminarImagenPublica(anterior.fondoLoginUrl);
     return NextResponse.json({ ok: true, config });
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);

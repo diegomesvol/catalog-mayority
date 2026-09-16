@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardarColecciones, leerColecciones } from "@/lib/blob";
+import { eliminarImagenPublica, guardarColecciones, leerColecciones } from "@/lib/blob";
 import { coleccionesSchema, limpiarColecciones } from "@/lib/schemas/colecciones";
 import { logError, pistaBlob } from "@/lib/logger";
 import { crearClienteServidor } from "@/lib/supabase";
@@ -34,7 +34,16 @@ export async function POST(request: NextRequest) {
     }
 
     const colecciones = limpiarColecciones(body);
+
+    // Misma limpieza que /api/admin/logos-footer: useColeccionesAdmin.subirImagen
+    // sube la portada enseguida a un endpoint aparte, antes de este guardado —
+    // sin esto, cada portada reemplazada o quitada quedaba huérfana en Storage.
+    const anteriores = await leerColecciones();
     await guardarColecciones(colecciones);
+    const urlsNuevas = new Set(colecciones.map((c) => c.imagenUrl).filter((u): u is string => Boolean(u)));
+    for (const anterior of anteriores) {
+      if (anterior.imagenUrl && !urlsNuevas.has(anterior.imagenUrl)) void eliminarImagenPublica(anterior.imagenUrl);
+    }
     return NextResponse.json({ ok: true, colecciones });
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);

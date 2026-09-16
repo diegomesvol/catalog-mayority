@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardarGuiaTallas, leerGuiaTallas, subirImagenGuiaTallas } from "@/lib/blob";
+import { eliminarImagenPublica, guardarGuiaTallas, leerGuiaTallas, subirImagenGuiaTallas } from "@/lib/blob";
 import type { GuiaTallas } from "@/lib/types";
 import { logError, pistaBlob } from "@/lib/logger";
 import { crearClienteServidor } from "@/lib/supabase";
@@ -73,6 +73,12 @@ export async function POST(request: NextRequest) {
     }
 
     await guardarGuiaTallas(nueva);
+    // "actual" es lo que había ANTES de mezclar — si un campo cambió (nuevo
+    // archivo, link, o "Eliminar") y lo viejo era nuestro, el archivo
+    // anterior queda huérfano en Storage si nadie lo borra.
+    for (const campo of CAMPOS satisfies readonly Campo[]) {
+      if (actual[campo] && actual[campo] !== nueva[campo]) void eliminarImagenPublica(actual[campo]);
+    }
     return NextResponse.json({ ok: true, guia: nueva });
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);

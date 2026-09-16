@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { logError } from "@/lib/logger";
-import { fetchJson } from "@/lib/apiCliente";
+import { descartarImagenSubida, fetchJson } from "@/lib/apiCliente";
 import { ImagenProducto } from "@/components/catalogo/ImagenProducto";
 import type { ConfigSitio } from "@/lib/types";
 import {
@@ -78,6 +78,11 @@ export function ConfiguracionForm() {
   }
 
   function cancelarEdicion() {
+    // Una imagen recién subida en esta edición (distinta de lo ya guardado)
+    // nunca llegó a persistirse en ningún lado — se descarta del bucket acá,
+    // si no queda huérfana para siempre (ver la nota en lib/apiCliente.ts).
+    if (borrador.logoUrl && borrador.logoUrl !== guardado.logoUrl) descartarImagenSubida(borrador.logoUrl);
+    if (borrador.fondoLoginUrl && borrador.fondoLoginUrl !== guardado.fondoLoginUrl) descartarImagenSubida(borrador.fondoLoginUrl);
     setEditando(false);
     setErrores({});
   }
@@ -113,6 +118,10 @@ export function ConfiguracionForm() {
         toast.error(data?.mensaje ?? "No se pudo subir la imagen.");
         return;
       }
+      // Reemplaza una subida de ESTA MISMA edición que todavía no se guardó
+      // — esa queda huérfana si no se descarta acá (la de más abajo,
+      // cancelarEdicion, cubre el caso de cancelar en vez de reemplazar).
+      if (borrador.fondoLoginUrl && borrador.fondoLoginUrl !== guardado.fondoLoginUrl) descartarImagenSubida(borrador.fondoLoginUrl);
       campo("fondoLoginUrl", data.url);
       toast.success("Imagen subida — no te olvides de \"Guardar cambios\".");
     } catch (err) {
@@ -138,6 +147,7 @@ export function ConfiguracionForm() {
         toast.error(data?.mensaje ?? "No se pudo subir el logo.");
         return;
       }
+      if (borrador.logoUrl && borrador.logoUrl !== guardado.logoUrl) descartarImagenSubida(borrador.logoUrl);
       campo("logoUrl", data.url);
       toast.success("Logo subido — no te olvides de \"Guardar cambios\".");
     } catch (err) {

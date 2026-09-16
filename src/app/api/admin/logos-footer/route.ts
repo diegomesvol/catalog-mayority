@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardarLogosFooter, leerLogosFooter } from "@/lib/blob";
+import { eliminarImagenPublica, guardarLogosFooter, leerLogosFooter } from "@/lib/blob";
 import { logosFooterSchema, limpiarLogosFooter } from "@/lib/schemas/logosFooter";
 import { logError, pistaBlob } from "@/lib/logger";
 import { crearClienteServidor } from "@/lib/supabase";
@@ -33,7 +33,17 @@ export async function POST(request: NextRequest) {
     }
 
     const logos = limpiarLogosFooter(body);
+
+    // Lista vieja ANTES de pisarla — cada logo reemplazado o eliminado en el
+    // panel (useLogosFooterAdmin.subirImagen sube la imagen enseguida a un
+    // endpoint aparte, antes de este guardado) deja su archivo anterior
+    // huérfano en Storage si nadie lo borra acá.
+    const anteriores = await leerLogosFooter();
     await guardarLogosFooter(logos);
+    const urlsNuevas = new Set(logos.map((l) => l.imagenUrl).filter((u): u is string => Boolean(u)));
+    for (const anterior of anteriores) {
+      if (anterior.imagenUrl && !urlsNuevas.has(anterior.imagenUrl)) void eliminarImagenPublica(anterior.imagenUrl);
+    }
     return NextResponse.json({ ok: true, logos });
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);

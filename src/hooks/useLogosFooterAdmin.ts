@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { logError } from "@/lib/logger";
-import { fetchJson } from "@/lib/apiCliente";
+import { descartarImagenSubida, fetchJson } from "@/lib/apiCliente";
 import type { LogoFooter } from "@/lib/types";
 import { MAX_LOGOS_FOOTER, MIN_LOGOS_FOOTER } from "@/lib/schemas/logosFooter";
 
@@ -23,6 +23,12 @@ export function useLogosFooterAdmin(logosIniciales: LogoFooter[]) {
   const [subiendoId, setSubiendoId] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [errores, setErrores] = useState<Record<string, string>>({});
+  // imagenUrl con la que llegó cada logo YA guardado — lo que permite saber,
+  // en eliminar()/subirImagen(), si la imagen actual de un logo es una que
+  // esta edición subió y todavía no se guardó (huérfana si no se descarta)
+  // o la que ya estaba persistida (esa la limpia el propio POST de guardado
+  // si termina quedando reemplazada — ver /api/admin/logos-footer).
+  const [valorGuardado, setValorGuardado] = useState(() => new Map(logosIniciales.map((l) => [l.id, l.imagenUrl])));
 
   function limpiarError(id: string) {
     setErrores((prev) => {
@@ -43,7 +49,14 @@ export function useLogosFooterAdmin(logosIniciales: LogoFooter[]) {
   }
 
   function eliminar(id: string) {
-    setLogos((prev) => prev.filter((l) => l.id !== id));
+    setLogos((prev) => {
+      const actual = prev.find((l) => l.id === id);
+      // La imagen de este logo se descarta acá SOLO si esta edición la subió
+      // y nunca llegó a guardarse — la que ya estaba persistida la limpia el
+      // propio guardado (ver la nota en valorGuardado).
+      if (actual?.imagenUrl && actual.imagenUrl !== valorGuardado.get(id)) descartarImagenSubida(actual.imagenUrl);
+      return prev.filter((l) => l.id !== id);
+    });
     limpiarError(id);
   }
 
@@ -69,7 +82,14 @@ export function useLogosFooterAdmin(logosIniciales: LogoFooter[]) {
         toast.error(data?.mensaje ?? fallback);
         return;
       }
-      setLogos((prev) => prev.map((l) => (l.id === id ? { ...l, imagenUrl: data.url! } : l)));
+      setLogos((prev) => {
+        const actual = prev.find((l) => l.id === id);
+        // Reemplaza una subida de esta misma edición que todavía no se
+        // guardó — se descarta acá para no dejarla huérfana (eliminar() de
+        // arriba cubre el caso de sacar la tarjeta en vez de reemplazarla).
+        if (actual?.imagenUrl && actual.imagenUrl !== valorGuardado.get(id)) descartarImagenSubida(actual.imagenUrl);
+        return prev.map((l) => (l.id === id ? { ...l, imagenUrl: data.url! } : l));
+      });
       limpiarError(id);
     } catch (err) {
       logError("useLogosFooterAdmin.subirImagen", err, "No se pudo conectar con el servidor para subir el logo.");
@@ -107,6 +127,11 @@ export function useLogosFooterAdmin(logosIniciales: LogoFooter[]) {
         return;
       }
       setLogos(data.logos);
+      // Sin esto, valorGuardado quedaría apuntando a los valores de ANTES de
+      // este guardado — un eliminar()/subirImagen() posterior, en la misma
+      // sesión, confundiría una imagen recién persistida con una todavía sin
+      // guardar y la descartaría del bucket por error.
+      setValorGuardado(new Map(data.logos.map((l) => [l.id, l.imagenUrl])));
       toast.success("Logos del footer actualizados.");
     } catch (err) {
       logError("useLogosFooterAdmin.guardar", err, "No se pudo conectar con el servidor — revisá tu conexión a internet y probá de nuevo.");

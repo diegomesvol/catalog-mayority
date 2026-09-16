@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { logError } from "@/lib/logger";
-import { fetchJson } from "@/lib/apiCliente";
+import { descartarImagenSubida, fetchJson } from "@/lib/apiCliente";
 import { prepararImagenParaSubir } from "@/lib/imagenCliente";
 import type { Coleccion, FiltroColeccion } from "@/lib/types";
 
@@ -55,7 +55,15 @@ export function useColeccionesAdmin(coleccionesIniciales: Coleccion[]) {
   }
 
   function eliminar(id: string) {
-    setColecciones((prev) => prev.filter((c) => c.id !== id));
+    setColecciones((prev) => {
+      const actual = prev.find((c) => c.id === id);
+      // Se descarta acá SOLO si esta edición subió esta imagen y nunca llegó
+      // a guardarse — la que ya estaba persistida la limpia el propio
+      // guardado (ver /api/admin/colecciones) al quedar fuera de la lista.
+      const guardadaUrl = guardadas.find((g) => g.id === id)?.imagenUrl ?? null;
+      if (actual?.imagenUrl && actual.imagenUrl !== guardadaUrl) descartarImagenSubida(actual.imagenUrl);
+      return prev.filter((c) => c.id !== id);
+    });
     setIdsEnEdicion((prev) => {
       if (!prev.has(id)) return prev;
       const copia = new Set(prev);
@@ -79,6 +87,11 @@ export function useColeccionesAdmin(coleccionesIniciales: Coleccion[]) {
   function cancelar(id: string) {
     const original = guardadas.find((g) => g.id === id);
     if (original) {
+      // Imagen subida durante esta edición y todavía no guardada — al
+      // revertir a "original" se pierde la única referencia que tenía, así
+      // que se descarta acá (mismo motivo que en eliminar()).
+      const actual = colecciones.find((c) => c.id === id);
+      if (actual?.imagenUrl && actual.imagenUrl !== original.imagenUrl) descartarImagenSubida(actual.imagenUrl);
       setColecciones((prev) => prev.map((c) => (c.id === id ? original : c)));
       setIdsEnEdicion((prev) => {
         const copia = new Set(prev);
@@ -111,6 +124,12 @@ export function useColeccionesAdmin(coleccionesIniciales: Coleccion[]) {
         toast.error(data?.mensaje ?? fallback);
         return;
       }
+      // Reemplaza una subida de esta misma edición que todavía no se guardó
+      // — se descarta acá para no dejarla huérfana (eliminar()/cancelar() de
+      // arriba cubren sacar o revertir la tarjeta en vez de reemplazarla).
+      const actual = colecciones.find((c) => c.id === id);
+      const guardadaUrl = guardadas.find((g) => g.id === id)?.imagenUrl ?? null;
+      if (actual?.imagenUrl && actual.imagenUrl !== guardadaUrl) descartarImagenSubida(actual.imagenUrl);
       actualizar(id, { imagenUrl: data.url });
     } catch (err) {
       logError("ColeccionesConfig.subirImagen", err, "No se pudo conectar con el servidor — revisá tu conexión a internet y probá de nuevo.");

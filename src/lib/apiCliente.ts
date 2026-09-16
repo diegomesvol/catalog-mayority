@@ -33,3 +33,20 @@ export async function fetchJson<T>(input: string, init?: RequestInit): Promise<{
   }
   return { resp, data };
 }
+
+// ConfiguracionForm/useColeccionesAdmin/useLogosFooterAdmin suben cada imagen
+// al bucket público apenas se elige el archivo (para previsualizarla antes
+// de guardar) — si el admin cancela la edición o reemplaza esa imagen antes
+// de llegar a "Guardar cambios", ese archivo nunca queda referenciado en
+// ningún lado y se vuelve huérfano en Storage. Se llama a este descarte en
+// esos dos casos puntuales; ver /api/admin/imagenes/descartar. Fire-and-forget
+// a propósito (nunca bloquea la acción del admin ni le muestra un error): un
+// blob huérfano es limpieza de Storage, no algo que deba interrumpir su flujo.
+export function descartarImagenSubida(url: string | null | undefined) {
+  if (!url) return;
+  fetch("/api/admin/imagenes/descartar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  }).catch(() => {});
+}
