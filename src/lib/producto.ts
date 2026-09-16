@@ -5,6 +5,7 @@
 // ligeramente distinta de lo mismo.
 
 import { formatearPrecio, tieneStock } from "./format";
+import { esCalzado } from "./transform";
 import type { Curva, Producto, VarianteColor } from "./types";
 
 export function tieneStockCurva(curva: Curva): boolean {
@@ -89,4 +90,48 @@ export function rangoPrecioProducto(producto: Producto): { min: number; max: num
 export function precioTextoProducto(producto: Producto): string {
   const { min, max } = rangoPrecioProducto(producto);
   return min === max ? formatearPrecio(min) : `Desde ${formatearPrecio(min)}`;
+}
+
+/** Suma de unidades disponibles (stock físico + en tránsito) en TODAS las tallas/curvas/colores del producto — usado por el orden "Mayor disponibilidad" del catálogo (ver ordenarProductos). */
+export function stockTotalProducto(producto: Producto): number {
+  return producto.colores.reduce(
+    (accColor, color) =>
+      accColor + color.curvas.reduce((accCurva, curva) => accCurva + curva.tallas.reduce((accTalla, t) => accTalla + t.disponible, 0), 0),
+    0,
+  );
+}
+
+export type OrdenCatalogo = "" | "precio-asc" | "precio-desc" | "alfabetico-asc" | "alfabetico-desc" | "stock-desc";
+
+/**
+ * Orden final de la grilla del catálogo público, aplicado DESPUÉS de
+ * filtrar (el orden no cambia qué productos aparecen, solo en qué
+ * secuencia) — ver OrdenSelector.tsx / CatalogoClient.tsx. "" (por
+ * defecto, sin que el comprador elija nada) es el orden curado de siempre:
+ * calzado antes que accesorios, luego marca y modelo — no el orden crudo
+ * del Excel importado.
+ */
+export function ordenarProductos(productos: Producto[], orden: OrdenCatalogo): Producto[] {
+  const copia = [...productos];
+  switch (orden) {
+    case "precio-asc":
+      return copia.sort((a, b) => rangoPrecioProducto(a).min - rangoPrecioProducto(b).min);
+    case "precio-desc":
+      return copia.sort((a, b) => rangoPrecioProducto(b).min - rangoPrecioProducto(a).min);
+    case "alfabetico-asc":
+      return copia.sort((a, b) => a.modelo.localeCompare(b.modelo, "es"));
+    case "alfabetico-desc":
+      return copia.sort((a, b) => b.modelo.localeCompare(a.modelo, "es"));
+    case "stock-desc":
+      return copia.sort((a, b) => stockTotalProducto(b) - stockTotalProducto(a));
+    default:
+      return copia.sort((a, b) => {
+        const rubroA = esCalzado(a.rubro) ? 0 : 1;
+        const rubroB = esCalzado(b.rubro) ? 0 : 1;
+        if (rubroA !== rubroB) return rubroA - rubroB;
+        const marcaCmp = a.marca.localeCompare(b.marca, "es");
+        if (marcaCmp !== 0) return marcaCmp;
+        return a.modelo.localeCompare(b.modelo, "es");
+      });
+  }
 }

@@ -1,64 +1,68 @@
 "use client";
 
 import { useId, useState } from "react";
+import type { OrdenCatalogo } from "@/lib/producto";
 
 export interface ValorFiltros {
   busqueda: string;
-  marca: string;
-  genero: string;
-  color: string;
-  categoria: string; // rubro: CALZADO / ACCESORIOS
-  linea: string;
-  precioDesde: string;
-  precioHasta: string;
+  marca: string[];
+  genero: string[];
+  color: string[];
+  categoria: string; // rubro: CALZADO / ACCESORIOS — sigue siendo único, no hay ambigüedad entre "calzado" y "accesorios" a la vez
+  linea: string[];
   tallas: string[];
   soloDisponibles: boolean;
+  orden: OrdenCatalogo;
 }
 
 export const FILTROS_VACIOS: ValorFiltros = {
   busqueda: "",
-  marca: "",
-  genero: "",
-  color: "",
+  marca: [],
+  genero: [],
+  color: [],
   categoria: "",
-  linea: "",
-  precioDesde: "",
-  precioHasta: "",
+  linea: [],
   tallas: [],
   soloDisponibles: false,
+  orden: "",
 };
+
+function listaDesdeParam(sp: URLSearchParams, clave: string): string[] {
+  const valor = sp.get(clave);
+  return valor ? valor.split(",").filter(Boolean) : [];
+}
 
 // Los filtros se reflejan en la URL (query string) para que: 1) el botón
 // "atrás" del navegador y el link "Volver al catálogo" restauren exactamente
 // lo que se estaba viendo, y 2) el link se pueda compartir ya filtrado.
+// Marca/Género/Color/Línea aceptan más de un valor a la vez — se guardan
+// separados por coma en un único param (ej. "marca=Volpe,Kriza"), mismo
+// criterio que ya usaba "talla" antes de este cambio.
 export function filtrosDesdeParams(sp: URLSearchParams): ValorFiltros {
-  const talla = sp.get("talla");
   return {
     busqueda: sp.get("q") ?? "",
-    marca: sp.get("marca") ?? "",
-    genero: sp.get("genero") ?? "",
-    color: sp.get("color") ?? "",
+    marca: listaDesdeParam(sp, "marca"),
+    genero: listaDesdeParam(sp, "genero"),
+    color: listaDesdeParam(sp, "color"),
     categoria: sp.get("cat") ?? "",
-    linea: sp.get("linea") ?? "",
-    precioDesde: sp.get("desde") ?? "",
-    precioHasta: sp.get("hasta") ?? "",
-    tallas: talla ? talla.split(",").filter(Boolean) : [],
+    linea: listaDesdeParam(sp, "linea"),
+    tallas: listaDesdeParam(sp, "talla"),
     soloDisponibles: sp.get("disp") === "1",
+    orden: (sp.get("orden") as OrdenCatalogo) ?? "",
   };
 }
 
 export function paramsDesdeFiltros(filtros: ValorFiltros, pagina: number): URLSearchParams {
   const sp = new URLSearchParams();
   if (filtros.busqueda.trim()) sp.set("q", filtros.busqueda.trim());
-  if (filtros.marca) sp.set("marca", filtros.marca);
-  if (filtros.genero) sp.set("genero", filtros.genero);
-  if (filtros.color) sp.set("color", filtros.color);
+  if (filtros.marca.length > 0) sp.set("marca", filtros.marca.join(","));
+  if (filtros.genero.length > 0) sp.set("genero", filtros.genero.join(","));
+  if (filtros.color.length > 0) sp.set("color", filtros.color.join(","));
   if (filtros.categoria) sp.set("cat", filtros.categoria);
-  if (filtros.linea) sp.set("linea", filtros.linea);
-  if (filtros.precioDesde) sp.set("desde", filtros.precioDesde);
-  if (filtros.precioHasta) sp.set("hasta", filtros.precioHasta);
+  if (filtros.linea.length > 0) sp.set("linea", filtros.linea.join(","));
   if (filtros.tallas.length > 0) sp.set("talla", filtros.tallas.join(","));
   if (filtros.soloDisponibles) sp.set("disp", "1");
+  if (filtros.orden) sp.set("orden", filtros.orden);
   if (pagina > 1) sp.set("pagina", String(pagina));
   return sp;
 }
@@ -74,9 +78,15 @@ interface Props {
   onChange: (valor: ValorFiltros) => void;
 }
 
+type CampoMultiple = "marca" | "genero" | "color" | "linea";
+
 function contarActivos(v: ValorFiltros): number {
   return (
-    [v.marca, v.genero, v.color, v.categoria, v.linea, v.precioDesde, v.precioHasta].filter(Boolean).length +
+    v.marca.length +
+    v.genero.length +
+    v.color.length +
+    v.linea.length +
+    (v.categoria ? 1 : 0) +
     (v.tallas.length > 0 ? 1 : 0) +
     (v.soloDisponibles ? 1 : 0)
   );
@@ -91,42 +101,39 @@ export function Filtros({ marcas, generos, colores, categorias, lineas, tallas, 
     onChange({ ...valor, [campo]: v });
   }
 
+  // Un mismo toggle sirve para Marca/Género/Color/Línea: todos son arrays de
+  // selección múltiple con la misma forma (agregar/quitar un valor).
+  function toggleMultiple(campo: CampoMultiple, opcion: string) {
+    const actual = valor[campo];
+    set(campo, actual.includes(opcion) ? actual.filter((v) => v !== opcion) : [...actual, opcion]);
+  }
+
   function toggleTalla(t: string) {
     const activa = valor.tallas.includes(t);
     set("tallas", activa ? valor.tallas.filter((x) => x !== t) : [...valor.tallas, t]);
   }
 
-  // "min={0}" en un <input type="number"> no impide tipear un negativo a
-  // mano — se recorta acá para que el filtro de precio nunca quede en un
-  // estado imposible.
-  function setPrecio(campo: "precioDesde" | "precioHasta", texto: string) {
-    if (texto === "") {
-      set(campo, "");
-      return;
-    }
-    const n = Number(texto);
-    set(campo, Number.isFinite(n) && n < 0 ? "0" : texto);
-  }
-
-  // Un chip por filtro activo, con su propio botón para quitar solo ese —
-  // así el comprador ve de un vistazo por qué el catálogo se achicó, y
-  // puede sacar un filtro puntual sin tener que limpiar todo de nuevo.
+  // Un chip por valor seleccionado (no uno agregado por filtro): así el
+  // comprador puede quitar, por ejemplo, solo "Volpe" de una selección de
+  // marca "Volpe + Kriza" sin perder la otra.
   const chips: { id: string; etiqueta: string; quitar: () => void }[] = [];
   if (valor.busqueda.trim()) {
     chips.push({ id: "busqueda", etiqueta: `Buscar: "${valor.busqueda.trim()}"`, quitar: () => set("busqueda", "") });
   }
-  if (valor.marca) chips.push({ id: "marca", etiqueta: `Marca: ${valor.marca}`, quitar: () => set("marca", "") });
-  if (valor.genero) chips.push({ id: "genero", etiqueta: `Género: ${valor.genero}`, quitar: () => set("genero", "") });
-  if (valor.color) chips.push({ id: "color", etiqueta: `Color: ${valor.color}`, quitar: () => set("color", "") });
+  for (const m of valor.marca) {
+    chips.push({ id: `marca-${m}`, etiqueta: `Marca: ${m}`, quitar: () => set("marca", valor.marca.filter((x) => x !== m)) });
+  }
+  for (const g of valor.genero) {
+    chips.push({ id: `genero-${g}`, etiqueta: `Género: ${g}`, quitar: () => set("genero", valor.genero.filter((x) => x !== g)) });
+  }
+  for (const l of valor.linea) {
+    chips.push({ id: `linea-${l}`, etiqueta: `Línea: ${l}`, quitar: () => set("linea", valor.linea.filter((x) => x !== l)) });
+  }
+  for (const c of valor.color) {
+    chips.push({ id: `color-${c}`, etiqueta: `Color: ${c}`, quitar: () => set("color", valor.color.filter((x) => x !== c)) });
+  }
   if (valor.categoria) {
     chips.push({ id: "categoria", etiqueta: `Categoría: ${valor.categoria}`, quitar: () => set("categoria", "") });
-  }
-  if (valor.linea) chips.push({ id: "linea", etiqueta: `Línea: ${valor.linea}`, quitar: () => set("linea", "") });
-  if (valor.precioDesde) {
-    chips.push({ id: "precioDesde", etiqueta: `Desde $${valor.precioDesde}`, quitar: () => set("precioDesde", "") });
-  }
-  if (valor.precioHasta) {
-    chips.push({ id: "precioHasta", etiqueta: `Hasta $${valor.precioHasta}`, quitar: () => set("precioHasta", "") });
   }
   if (valor.tallas.length > 0) {
     chips.push({
@@ -187,112 +194,27 @@ export function Filtros({ marcas, generos, colores, categorias, lineas, tallas, 
         </div>
       )}
 
-      <div id={idPanel} className={`${abierto ? "grid" : "hidden"} grid-cols-2 gap-3 sm:grid-cols-4 lg:grid lg:gap-4`}>
-        <Select
-          etiqueta="Marca"
-          value={valor.marca}
-          onChange={(v) => set("marca", v)}
-          opciones={marcas}
-          todas="Todas las marcas"
-        />
-        <Select
-          etiqueta="Género"
-          value={valor.genero}
-          onChange={(v) => set("genero", v)}
-          opciones={generos}
-          todas="Todos los géneros"
-        />
-        <Select
-          etiqueta="Color"
-          value={valor.color}
-          onChange={(v) => set("color", v)}
-          opciones={colores}
-          todas="Todos los colores"
-        />
+      <div id={idPanel} className={`${abierto ? "flex" : "hidden"} flex-col gap-4 lg:flex`}>
         {categorias.length > 1 && (
-          <Select
-            etiqueta="Categoría"
-            value={valor.categoria}
-            onChange={(v) => set("categoria", v)}
-            opciones={categorias}
-            todas="Calzado y accesorios"
-          />
-        )}
-        {lineas.length > 0 && (
-          <Select
-            etiqueta="Línea"
-            value={valor.linea}
-            onChange={(v) => set("linea", v)}
-            opciones={lineas}
-            todas="Todas las líneas"
-          />
-        )}
-        <div className="col-span-2 flex items-end gap-2 sm:col-span-1">
-          <div className="flex-1">
-            <label htmlFor="precio-desde" className="mb-1 block text-xs font-medium text-ink-500">
-              Precio desde
-            </label>
-            <input
-              id="precio-desde"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              placeholder="$0"
-              value={valor.precioDesde}
-              onChange={(e) => setPrecio("precioDesde", e.target.value)}
-              className={`w-full rounded-lg border px-3 py-2 text-sm focus:border-accent-600 ${
-                valor.precioDesde ? "border-ink-900 bg-ink-900 font-medium text-white" : "border-ink-200 bg-paper-raised"
-              }`}
+          <div className="max-w-xs">
+            <Select
+              etiqueta="Categoría"
+              value={valor.categoria}
+              onChange={(v) => set("categoria", v)}
+              opciones={categorias}
+              todas="Calzado y accesorios"
             />
           </div>
-          <div className="flex-1">
-            <label htmlFor="precio-hasta" className="mb-1 block text-xs font-medium text-ink-500">
-              Precio hasta
-            </label>
-            <input
-              id="precio-hasta"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              placeholder="$999"
-              value={valor.precioHasta}
-              onChange={(e) => setPrecio("precioHasta", e.target.value)}
-              className={`w-full rounded-lg border px-3 py-2 text-sm focus:border-accent-600 ${
-                valor.precioHasta ? "border-ink-900 bg-ink-900 font-medium text-white" : "border-ink-200 bg-paper-raised"
-              }`}
-            />
-          </div>
-        </div>
+        )}
 
-        {tallas.length > 0 && (
-          <div className="col-span-2 sm:col-span-4">
-            <span className="mb-1.5 block text-xs font-medium text-ink-500">Talla</span>
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtrar por talla">
-              {tallas.map((t) => {
-                const activa = valor.tallas.includes(t);
-                return (
-                  <button
-                    key={t}
-                    type="button"
-                    aria-pressed={activa}
-                    onClick={() => toggleTalla(t)}
-                    className={[
-                      "min-w-9 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
-                      activa
-                        ? "border-ink-900 bg-ink-900 text-white"
-                        : "border-ink-200 bg-paper-raised text-ink-900 hover:border-ink-900",
-                    ].join(" ")}
-                  >
-                    {t}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        <GrupoOpciones etiqueta="Marca" seleccionados={valor.marca} opciones={marcas} onToggle={(v) => toggleMultiple("marca", v)} />
+        <GrupoOpciones etiqueta="Género" seleccionados={valor.genero} opciones={generos} onToggle={(v) => toggleMultiple("genero", v)} />
+        <GrupoOpciones etiqueta="Línea" seleccionados={valor.linea} opciones={lineas} onToggle={(v) => toggleMultiple("linea", v)} />
+        <GrupoOpciones etiqueta="Color" seleccionados={valor.color} opciones={colores} onToggle={(v) => toggleMultiple("color", v)} />
+        <GrupoOpciones etiqueta="Talla" seleccionados={valor.tallas} opciones={tallas} onToggle={toggleTalla} />
 
         <label
-          className={`col-span-2 flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm sm:col-span-4 ${
+          className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${
             valor.soloDisponibles ? "bg-ink-900 font-medium text-white" : "text-ink-900"
           }`}
         >
@@ -304,6 +226,51 @@ export function Filtros({ marcas, generos, colores, categorias, lineas, tallas, 
           />
           Solo mostrar productos con stock disponible
         </label>
+      </div>
+    </div>
+  );
+}
+
+// Grupo de badges de selección múltiple (checkboxes visuales) — mismo look
+// que ya tenía el filtro de Talla, reutilizado ahora también para
+// Marca/Género/Línea/Color en vez del <select> nativo de antes: permite
+// marcar varios valores a la vez sin un menú desplegable por medio. Oculto
+// del todo si no hay opciones (ej. el catálogo no tiene "línea" cargada).
+function GrupoOpciones({
+  etiqueta,
+  seleccionados,
+  opciones,
+  onToggle,
+}: {
+  etiqueta: string;
+  seleccionados: string[];
+  opciones: string[];
+  onToggle: (valor: string) => void;
+}) {
+  if (opciones.length === 0) return null;
+  return (
+    <div>
+      <span className="mb-1.5 block text-xs font-medium text-ink-500">{etiqueta}</span>
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label={`Filtrar por ${etiqueta.toLowerCase()}`}>
+        {opciones.map((o) => {
+          const activa = seleccionados.includes(o);
+          return (
+            <button
+              key={o}
+              type="button"
+              aria-pressed={activa}
+              onClick={() => onToggle(o)}
+              className={[
+                "min-w-9 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                activa
+                  ? "border-ink-900 bg-ink-900 text-white"
+                  : "border-ink-200 bg-paper-raised text-ink-900 hover:border-ink-900",
+              ].join(" ")}
+            >
+              {o}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

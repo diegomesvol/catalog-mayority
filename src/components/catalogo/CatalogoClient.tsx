@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { Producto } from "@/lib/types";
 import { Filtros, FILTROS_VACIOS, filtrosDesdeParams, paramsDesdeFiltros, type ValorFiltros } from "./Filtros";
+import { OrdenSelector } from "./OrdenSelector";
 import { useBusqueda } from "./BusquedaContext";
 import { ProductGrid } from "./ProductGrid";
 import { EstadoVacio } from "./EstadoVacio";
-import { tieneStockProducto, tallasDelProducto } from "@/lib/producto";
-import { esCalzado } from "@/lib/transform";
+import { tieneStockProducto, tallasDelProducto, ordenarProductos, type OrdenCatalogo } from "@/lib/producto";
+import { leerFiltrosGuardados, guardarFiltros } from "@/lib/filtrosCatalogoLocal";
 
 const POR_PAGINA = 100;
 
@@ -31,21 +32,16 @@ function coincideConFiltros(p: Producto, filtros: ValorFiltros, omitir?: CampoFi
     const campoBusqueda = `${p.modelo} ${p.marca} ${p.codigoModelo ?? ""} ${camposPorColor.join(" ")}`.toLowerCase();
     if (!campoBusqueda.includes(busqueda)) return false;
   }
-  if (omitir !== "marca" && filtros.marca && p.marca !== filtros.marca) return false;
-  if (omitir !== "genero" && filtros.genero && p.genero !== filtros.genero) return false;
-  if (omitir !== "color" && filtros.color && !p.colores.some((c) => c.color === filtros.color)) return false;
+  // Marca/Género/Color/Línea: selección múltiple — el producto entra si
+  // coincide con ALGUNO de los valores elegidos en cada filtro (OR dentro
+  // del mismo campo), y deben cumplirse TODOS los campos activos entre sí
+  // (AND entre campos distintos) — mismo criterio de faceted-filter de
+  // siempre, solo que ahora cada campo admite más de un valor.
+  if (omitir !== "marca" && filtros.marca.length > 0 && !filtros.marca.includes(p.marca)) return false;
+  if (omitir !== "genero" && filtros.genero.length > 0 && !filtros.genero.includes(p.genero)) return false;
+  if (omitir !== "color" && filtros.color.length > 0 && !p.colores.some((c) => filtros.color.includes(c.color))) return false;
   if (omitir !== "categoria" && filtros.categoria && p.rubro !== filtros.categoria) return false;
-  if (omitir !== "linea" && filtros.linea && p.linea !== filtros.linea) return false;
-  if (omitir !== "precioDesde" && omitir !== "precioHasta") {
-    const desde = filtros.precioDesde ? Number(filtros.precioDesde) : null;
-    const hasta = filtros.precioHasta ? Number(filtros.precioHasta) : null;
-    const algunColorEnRango = p.colores.some((c) => {
-      if (desde !== null && Number.isFinite(desde) && c.precio < desde) return false;
-      if (hasta !== null && Number.isFinite(hasta) && c.precio > hasta) return false;
-      return true;
-    });
-    if (!algunColorEnRango) return false;
-  }
+  if (omitir !== "linea" && filtros.linea.length > 0 && !(p.linea && filtros.linea.includes(p.linea))) return false;
   if (omitir !== "tallas" && filtros.tallas.length > 0) {
     const tallasProducto = tallasDelProducto(p);
     if (!filtros.tallas.some((t) => tallasProducto.includes(t))) return false;
@@ -68,7 +64,7 @@ function opcionesContextuales(
   filtros: ValorFiltros,
   campo: CampoFiltro,
   extraer: (p: Producto) => (string | undefined)[],
-  valorActual: string,
+  valorActual: string | string[],
 ): string[] {
   const conjunto = new Set(
     productos
@@ -76,7 +72,8 @@ function opcionesContextuales(
       .flatMap(extraer)
       .filter((v): v is string => Boolean(v)),
   );
-  if (valorActual) conjunto.add(valorActual);
+  const actuales = Array.isArray(valorActual) ? valorActual : valorActual ? [valorActual] : [];
+  for (const v of actuales) conjunto.add(v);
   return Array.from(conjunto).sort((a, b) => a.localeCompare(b, "es"));
 }
 
@@ -85,7 +82,25 @@ export function CatalogoClient({ productos }: { productos: Producto[] }) {
   // catálogo arranca mostrando exactamente lo que decía la URL (por ejemplo,
   // al volver desde un producto o al abrir un link compartido ya filtrado).
   const searchParamsIniciales = useSearchParams();
-  const [filtros, setFiltros] = useState<ValorFiltros>(() => filtrosDesdeParams(searchParamsIniciales));
+  const [filtros, setFiltros] = useState<ValorFiltros>(() => {
+    const desdeUrl = filtrosDesdeParams(searchParamsIniciales);
+    const hayFiltroEnUrl =
+      desdeUrl.marca.length > 0 ||
+      desdeUrl.genero.length > 0 ||
+      desdeUrl.color.length > 0 ||
+      Boolean(desdeUrl.categoria) ||
+      desdeUrl.linea.length > 0 ||
+      desdeUrl.tallas.length > 0 ||
+      desdeUrl.soloDisponibles ||
+      Boolean(desdeUrl.orden);
+    // Un link compartido (o volver desde un producto) siempre gana sobre lo
+    // guardado en este navegador — solo se recurre a localStorage cuando la
+    // URL no trae NINGÚN filtro/orden propio, para restaurar la última
+    // búsqueda entre visitas (ver lib/filtrosCatalogoLocal.ts).
+    if (hayFiltroEnUrl) return desdeUrl;
+    const guardados = leerFiltrosGuardados();
+    return guardados ? { ...FILTROS_VACIOS, ...guardados } : desdeUrl;
+  });
   const [pagina, setPagina] = useState(() => {
     const p = Number(searchParamsIniciales.get("pagina"));
     return Number.isFinite(p) && p > 0 ? p : 1;
@@ -107,70 +122,65 @@ export function CatalogoClient({ productos }: { productos: Producto[] }) {
     return () => setModoVivo(false);
   }, [setModoVivo]);
 
-  // Orden por defecto (sin búsqueda/filtros activos): calzado antes que
-  // accesorios, luego por marca y modelo — para que el catálogo abra con una
-  // vista curada en vez del orden crudo de la fila del Excel importado.
-  const productosOrdenados = useMemo(() => {
-    return [...productos].sort((a, b) => {
-      const rubroA = esCalzado(a.rubro) ? 0 : 1;
-      const rubroB = esCalzado(b.rubro) ? 0 : 1;
-      if (rubroA !== rubroB) return rubroA - rubroB;
-      const marcaCmp = a.marca.localeCompare(b.marca, "es");
-      if (marcaCmp !== 0) return marcaCmp;
-      return a.modelo.localeCompare(b.modelo, "es");
-    });
-  }, [productos]);
-
   // Cada Select recibe solo las opciones que existen dado el resto de los
   // filtros ya activos (ver opcionesContextuales) — es lo que hace que,
   // visualmente, "desaparezcan" categorías sin resultado en vez de quedar
-  // ahí invitando a una combinación vacía.
+  // ahí invitando a una combinación vacía. El orden de "productos" (prop)
+  // acá no importa — filtrar es una operación sin orden; el orden final que
+  // ve el comprador se aplica una sola vez, al final, sobre "filtrados"
+  // (ver ordenarProductos más abajo).
   const marcas = useMemo(
-    () => opcionesContextuales(productosOrdenados, filtrosCombinados, "marca", (p) => [p.marca], filtrosCombinados.marca),
-    [productosOrdenados, filtrosCombinados],
+    () => opcionesContextuales(productos, filtrosCombinados, "marca", (p) => [p.marca], filtrosCombinados.marca),
+    [productos, filtrosCombinados],
   );
   const generos = useMemo(
-    () => opcionesContextuales(productosOrdenados, filtrosCombinados, "genero", (p) => [p.genero], filtrosCombinados.genero),
-    [productosOrdenados, filtrosCombinados],
+    () => opcionesContextuales(productos, filtrosCombinados, "genero", (p) => [p.genero], filtrosCombinados.genero),
+    [productos, filtrosCombinados],
   );
   const colores = useMemo(
     () =>
       opcionesContextuales(
-        productosOrdenados,
+        productos,
         filtrosCombinados,
         "color",
         (p) => p.colores.map((c) => c.color),
         filtrosCombinados.color,
       ),
-    [productosOrdenados, filtrosCombinados],
+    [productos, filtrosCombinados],
   );
   const categorias = useMemo(
-    () =>
-      opcionesContextuales(productosOrdenados, filtrosCombinados, "categoria", (p) => [p.rubro], filtrosCombinados.categoria),
-    [productosOrdenados, filtrosCombinados],
+    () => opcionesContextuales(productos, filtrosCombinados, "categoria", (p) => [p.rubro], filtrosCombinados.categoria),
+    [productos, filtrosCombinados],
   );
   const lineas = useMemo(
-    () => opcionesContextuales(productosOrdenados, filtrosCombinados, "linea", (p) => [p.linea], filtrosCombinados.linea),
-    [productosOrdenados, filtrosCombinados],
+    () => opcionesContextuales(productos, filtrosCombinados, "linea", (p) => [p.linea], filtrosCombinados.linea),
+    [productos, filtrosCombinados],
   );
   const tallas = useMemo(() => {
     const conjunto = new Set(
-      productosOrdenados.filter((p) => coincideConFiltros(p, filtrosCombinados, "tallas")).flatMap((p) => tallasDelProducto(p)),
+      productos.filter((p) => coincideConFiltros(p, filtrosCombinados, "tallas")).flatMap((p) => tallasDelProducto(p)),
     );
     for (const t of filtrosCombinados.tallas) conjunto.add(t);
     return Array.from(conjunto).sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
-  }, [productosOrdenados, filtrosCombinados]);
+  }, [productos, filtrosCombinados]);
 
   const filtrados = useMemo(
-    () => productosOrdenados.filter((p) => coincideConFiltros(p, filtrosCombinados)),
-    [productosOrdenados, filtrosCombinados],
+    () => productos.filter((p) => coincideConFiltros(p, filtrosCombinados)),
+    [productos, filtrosCombinados],
   );
 
-  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+  // Único lugar donde el orden elegido por el comprador (o el curado por
+  // defecto) se aplica de verdad — ver ordenarProductos en lib/producto.ts.
+  const filtradosOrdenados = useMemo(
+    () => ordenarProductos(filtrados, filtrosCombinados.orden),
+    [filtrados, filtrosCombinados.orden],
+  );
+
+  const totalPaginas = Math.max(1, Math.ceil(filtradosOrdenados.length / POR_PAGINA));
   const paginaActual = Math.min(pagina, totalPaginas);
   const paginados = useMemo(
-    () => filtrados.slice((paginaActual - 1) * POR_PAGINA, paginaActual * POR_PAGINA),
-    [filtrados, paginaActual],
+    () => filtradosOrdenados.slice((paginaActual - 1) * POR_PAGINA, paginaActual * POR_PAGINA),
+    [filtradosOrdenados, paginaActual],
   );
 
   // Mantiene la URL sincronizada con los filtros y la página activos, sin
@@ -182,6 +192,13 @@ export function CatalogoClient({ productos }: { productos: Producto[] }) {
     const url = qs ? `/?${qs}` : "/";
     window.history.replaceState(null, "", url);
   }, [filtrosCombinados, paginaActual]);
+
+  // Espejo en localStorage de los mismos filtros/orden — ver la nota grande
+  // en lib/filtrosCatalogoLocal.ts (por qué existe además de la URL, y qué
+  // NO cubre: el landing de colecciones).
+  useEffect(() => {
+    guardarFiltros(filtrosCombinados);
+  }, [filtrosCombinados]);
 
   // Href al que vuelve cada tarjeta de producto — el catálogo completo con
   // los filtros y la página actuales, para que "Volver al catálogo" no
@@ -198,6 +215,14 @@ export function CatalogoClient({ productos }: { productos: Producto[] }) {
   function cambiarFiltros(v: ValorFiltros) {
     setBusqueda(v.busqueda);
     setFiltros(v);
+    setPagina(1);
+  }
+
+  // Separado de cambiarFiltros: el orden no toca busqueda/BusquedaContext,
+  // solo reordena lo ya filtrado — pero sí vuelve a página 1, porque el
+  // contenido de cada página cambia por completo.
+  function cambiarOrden(orden: OrdenCatalogo) {
+    setFiltros((f) => ({ ...f, orden }));
     setPagina(1);
   }
 
@@ -219,10 +244,13 @@ export function CatalogoClient({ productos }: { productos: Producto[] }) {
         onChange={cambiarFiltros}
       />
 
-      <p className="text-xs text-ink-500" role="status">
-        {filtrados.length} {filtrados.length === 1 ? "producto" : "productos"}
-        {totalPaginas > 1 && ` · página ${paginaActual} de ${totalPaginas}`}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-ink-500" role="status">
+          {filtrados.length} {filtrados.length === 1 ? "producto" : "productos"}
+          {totalPaginas > 1 && ` · página ${paginaActual} de ${totalPaginas}`}
+        </p>
+        {filtrados.length > 0 && <OrdenSelector valor={filtrosCombinados.orden} onChange={cambiarOrden} />}
+      </div>
 
       {filtrados.length === 0 ? (
         <EstadoVacio
