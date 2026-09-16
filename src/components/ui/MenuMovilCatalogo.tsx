@@ -37,9 +37,10 @@ const suscribirNada = () => () => {};
 // pedido" más abajo), sigue siendo un panel visualmente distinto
 // (CarritoDrawer) que se superpone encima al tocarlo.
 //
-// "Descargar", "Ingresar"/"Mi cuenta" y "Pedido" viven como filas de ancho
-// completo acá adentro (no como pills sueltas en el header): en mobile se
-// apilaban/superponían con el buscador en cuanto cualquiera crecía (ej. el
+// "Descargar", los accesos de cuenta ("Ingresar", o "Catálogo"/"Mis
+// pedidos"/"Mi perfil" con sesión activa) y "Pedido" viven como filas de
+// ancho completo acá adentro (no como pills sueltas en el header): en mobile
+// se apilaban/superponían con el buscador en cuanto cualquiera crecía (ej. el
 // botón de cancelar de DescargaOffline mientras descarga). Con la sesión
 // activa se ve avatar/iniciales + nombre + email (mismo dato que
 // CuentaClienteMenu) y "Cerrar sesión" queda destacado en rojo, mismo
@@ -47,6 +48,16 @@ const suscribirNada = () => () => {};
 // admin/cliente) — acá sin ese componente compartido porque el suyo asume
 // un sidebar vertical (rounded-lg, ancho fijo) y esto ya es una fila de
 // drawer con su propio ancho completo.
+//
+// Este es el ÚNICO menú mobile en toda la app con sesión activa (catálogo o
+// "Mi cuenta" — ver la nota grande en ClienteHeader.tsx y en ClienteNav.tsx):
+// por eso, con `cliente`, expone los mismos 3 accesos que ClienteNav en
+// desktop (Catálogo/Mis pedidos/Mi perfil) en vez de un solo link genérico —
+// antes existía "ClienteNavMovil", un nav horizontal aparte que se mostraba
+// SOLO dentro de /cliente/*; ese menú duplicado (y distinto a este drawer) es
+// lo que hacía que /cliente mostrara una interfaz visualmente rota al
+// navegar ahí logueado. Ya no existe: este drawer es el mismo en todas
+// partes.
 export function MenuMovilCatalogo({ cliente, logoTiendaUrl = null }: Props) {
   const [abierto, setAbierto] = useState(false);
   // El backdrop + <aside> se montan vía createPortal directo a document.body
@@ -222,17 +233,54 @@ export function MenuMovilCatalogo({ cliente, logoTiendaUrl = null }: Props) {
                   )}
                 </button>
 
-                <Link
-                  href={cliente ? "/cliente" : "/cliente/login"}
-                  onClick={cerrar}
-                  className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-ink-900 transition-colors hover:bg-ink-100"
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true" className="shrink-0">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" strokeLinecap="round" strokeLinejoin="round" />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
-                  {cliente ? "Mi cuenta" : "Ingresar"}
-                </Link>
+                {cliente ? (
+                  <>
+                    <Link
+                      href="/"
+                      onClick={cerrar}
+                      className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-ink-900 transition-colors hover:bg-ink-100"
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true" className="shrink-0">
+                        <path d="M3 7h18M3 12h18M3 17h18" strokeLinecap="round" />
+                      </svg>
+                      Catálogo
+                    </Link>
+                    <Link
+                      href="/cliente"
+                      onClick={cerrar}
+                      className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-ink-900 transition-colors hover:bg-ink-100"
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true" className="shrink-0">
+                        <path d="M9 3h6a1 1 0 0 1 1 1v1h2a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h2V4a1 1 0 0 1 1-1Z" />
+                        <path d="M9 12h6M9 16h6" strokeLinecap="round" />
+                      </svg>
+                      Mis pedidos
+                    </Link>
+                    <Link
+                      href="/cliente/perfil"
+                      onClick={cerrar}
+                      className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-ink-900 transition-colors hover:bg-ink-100"
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true" className="shrink-0">
+                        <circle cx="12" cy="8" r="3.5" />
+                        <path d="M4.5 20c1.4-3.4 4.4-5.5 7.5-5.5s6.1 2.1 7.5 5.5" strokeLinecap="round" />
+                      </svg>
+                      Mi perfil
+                    </Link>
+                  </>
+                ) : (
+                  <Link
+                    href="/cliente/login"
+                    onClick={cerrar}
+                    className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-ink-900 transition-colors hover:bg-ink-100"
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true" className="shrink-0">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" strokeLinecap="round" strokeLinejoin="round" />
+                      <circle cx="12" cy="7" r="4" />
+                    </svg>
+                    Ingresar
+                  </Link>
+                )}
 
                 {/* Cerrar sesión: única acción destructiva/de salida del drawer,
                     siempre en rojo (texto + ícono) — mismo criterio que el resto

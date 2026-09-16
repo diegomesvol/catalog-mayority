@@ -103,7 +103,6 @@ export default async function PaginaProducto({ params, searchParams }: Props) {
     <ClienteHeader
       perfilCompleto={clienteActivo.perfilCompleto}
       cliente={{ nombre: clienteActivo.nombre, email: clienteActivo.email, avatarUrl: clienteActivo.avatarUrl }}
-      mostrarBarraTitulo={false}
     >
       {contenido}
     </ClienteHeader>

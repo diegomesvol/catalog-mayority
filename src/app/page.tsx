@@ -65,14 +65,13 @@ export default async function PaginaCatalogo({ searchParams }: Props) {
   // Con sesión activa: mismo sidebar que "Mi cuenta" (ver ClienteHeader)
   // envolviendo el catálogo, para que no haya salto de navegación entre las
   // dos áreas — Header.tsx sigue siendo la barra de arriba tal cual estaba
-  // (logo/búsqueda/carrito), sin tocarla; mostrarBarraTitulo=false porque ya
-  // trae su propia barra completa, no hace falta la de ClienteHeader encima.
+  // (logo/búsqueda/carrito), sin tocarla — ClienteHeader ya NO tiene una
+  // barra propia (ver esa nota grande ahí), es solo el sidebar.
   if (!clienteActivo) return contenido;
   return (
     <ClienteHeader
       perfilCompleto={clienteActivo.perfilCompleto}
       cliente={{ nombre: clienteActivo.nombre, email: clienteActivo.email, avatarUrl: clienteActivo.avatarUrl }}
-      mostrarBarraTitulo={false}
     >
       {contenido}
     </ClienteHeader>

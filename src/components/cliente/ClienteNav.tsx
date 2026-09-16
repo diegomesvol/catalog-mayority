@@ -172,37 +172,13 @@ export function ClienteNav({ logoUrl = null, cliente = null }: Props) {
   );
 }
 
-// Mismo patrón que MenuMovilAdmin — nav horizontal simple por debajo de
-// "lg", donde no entra el sidebar de arriba.
-export function ClienteNavMovil() {
-  const pathname = usePathname();
-  // Mismo cierre de sesión que el sidebar de escritorio (ver ClienteNav) —
-  // acá como pill circular ícono-solo al final de la barra (redondo), no
-  // hay espacio para el texto en este layout horizontal.
-  const { saliendo, salir } = useCerrarSesion({ endpoint: "/api/cliente/logout", redirectTo: "/cliente/login", origen: "ClienteNavMovil.salir" });
-  return (
-    <nav aria-label="Secciones de mi cuenta" className="flex items-center gap-1 overflow-x-auto border-b border-ink-200 bg-paper-raised px-2 py-2 lg:hidden">
-      {ITEMS.map((item) => {
-        const activo = esItemActivo(item.href, pathname);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={activo ? "page" : undefined}
-            className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-              activo ? "bg-ink-900 text-white" : "text-ink-700 hover:bg-ink-100"
-            }`}
-          >
-            {item.icono}
-            {item.etiqueta}
-          </Link>
-        );
-      })}
-      <div className="ml-auto h-6 w-px shrink-0 bg-ink-200" aria-hidden="true" />
-      <BotonCerrarSesion saliendo={saliendo} onClick={salir} redondo />
-    </nav>
-  );
-}
+// Mobile (por debajo de "lg", donde el <aside> de arriba no se ve): ya no
+// hay un nav horizontal propio acá (existía "ClienteNavMovil" — se sacó
+// porque duplicaba navegación con el Drawer de Header.tsx/
+// MenuMovilCatalogo, que ahora es el único menú mobile en toda la app con
+// sesión activa, catálogo o Mi Cuenta — ver la nota grande en
+// ClienteHeader.tsx). Los mismos 3 accesos (Catálogo/Mis pedidos/Mi perfil)
+// viven ahí adentro.
 
 function IconoCatalogo() {
   return (

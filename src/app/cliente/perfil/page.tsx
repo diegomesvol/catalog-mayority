@@ -1,4 +1,3 @@
-import { ClienteHeader } from "@/components/cliente/ClienteHeader";
 import { PerfilClienteForm } from "@/components/cliente/PerfilClienteForm";
 import { crearClienteServidor } from "@/lib/supabase";
 import { obtenerClienteActivo } from "@/lib/clienteAuth";
@@ -16,10 +15,6 @@ export default async function PaginaPerfilCliente() {
   const perfil = await obtenerClienteActivo(supabase);
 
   return (
-    <ClienteHeader
-      perfilCompleto={perfil?.perfilCompleto ?? true}
-      cliente={perfil ? { nombre: perfil.nombre, email: perfil.email, avatarUrl: perfil.avatarUrl } : null}
-    >
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
         <h1 className="text-base font-semibold text-ink-900">Mi perfil</h1>
         <p className="mt-1 text-sm text-ink-500">
@@ -30,6 +25,5 @@ export default async function PaginaPerfilCliente() {
 
         {perfil && <PerfilClienteForm perfilInicial={perfil} />}
       </main>
-    </ClienteHeader>
   );
 }

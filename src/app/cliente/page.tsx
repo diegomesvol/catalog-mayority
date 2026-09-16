@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { ClienteHeader } from "@/components/cliente/ClienteHeader";
 import { crearClienteServidor } from "@/lib/supabase";
 import { obtenerClienteActivo } from "@/lib/clienteAuth";
 import { formatearPrecio } from "@/lib/format";
@@ -58,10 +57,6 @@ export default async function PaginaCliente() {
   }
 
   return (
-    <ClienteHeader
-      perfilCompleto={perfil?.perfilCompleto ?? true}
-      cliente={perfil ? { nombre: perfil.nombre, email: perfil.email, avatarUrl: perfil.avatarUrl } : null}
-    >
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
         {perfil && (
           <div className="mb-6">
@@ -129,6 +124,5 @@ export default async function PaginaCliente() {
           </ul>
         )}
       </main>
-    </ClienteHeader>
   );
 }

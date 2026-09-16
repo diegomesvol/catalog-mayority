@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ClienteHeader } from "@/components/cliente/ClienteHeader";
 import { crearClienteServidor } from "@/lib/supabase";
 import { obtenerClienteActivo } from "@/lib/clienteAuth";
 import { formatearPrecio } from "@/lib/format";
@@ -61,10 +60,6 @@ export default async function PaginaDetallePedidoCliente({ params }: { params: P
   const p = pedido as Pedido;
 
   return (
-    <ClienteHeader
-      perfilCompleto={perfil?.perfilCompleto ?? true}
-      cliente={perfil ? { nombre: perfil.nombre, email: perfil.email, avatarUrl: perfil.avatarUrl } : null}
-    >
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
         <Link href="/cliente" className="text-sm font-medium text-ink-500 hover:text-ink-900">
           ← Mis pedidos
@@ -147,6 +142,5 @@ export default async function PaginaDetallePedidoCliente({ params }: { params: P
           </dl>
         </div>
       </main>
-    </ClienteHeader>
   );
 }
