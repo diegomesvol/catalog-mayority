@@ -60,7 +60,26 @@ export function ClienteHeader({ children, perfilCompleto, cliente = null }: Prop
     <div className="flex flex-1">
       <ClienteNav logoUrl={logoUrl} cliente={cliente} />
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
+      {/* min-w-0 (no overflow-x-hidden): esta columna es un flex item al
+          lado del sidebar (h-screen) — "overflow-x-hidden" acá adentro tenía
+          DOS efectos colaterales que rompían el <Header /> sticky de los
+          children: (1) por la spec de CSS Overflow, fijar solo overflow-x
+          hace que overflow-y compute a "auto" (deja de ser "visible"), así
+          que esta columna pasa a ser SU PROPIO contenedor de scroll en vez
+          de que se siga usando el scroll de la página; y (2) cualquier
+          "overflow" no-visible en un flex item anula su min-height:auto por
+          defecto (que normalmente respeta el alto del contenido), así que
+          "align-items: stretch" del row de arriba la fuerza a los 100vh del
+          sidebar en vez de crecer con el catálogo — quedaba recortada a un
+          scroll interno de 100vh en vez de scrollear con toda la página.
+          Efecto visible: el <Header /> (sticky top-0) se quedaba pegado
+          arriba de ESE contenedor recortado, no de la ventana, y se sentía
+          como que "no quedaba fijo" al hacer scroll real de la página.
+          min-w-0 solo (sin overflow-x-hidden) ya alcanza para lo que se
+          buscaba con esto — que el contenido angosto no fuerce scroll
+          horizontal — sin tocar el eje vertical ni el contenedor de scroll
+          de sticky. */}
+      <div className="flex min-w-0 flex-1 flex-col">
         {!perfilCompleto && (
           <div className="border-b border-warning-600/30 bg-warning-100 px-4 py-2.5 sm:px-6">
             <p className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-x-2 gap-y-1 text-xs text-warning-600">
