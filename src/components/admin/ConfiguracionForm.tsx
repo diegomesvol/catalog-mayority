@@ -3,16 +3,33 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { logError } from "@/lib/logger";
+import { descartarImagenSubida, fetchJson } from "@/lib/apiCliente";
+import { ImagenProducto } from "@/components/catalogo/ImagenProducto";
 import type { ConfigSitio } from "@/lib/types";
 import {
   DESCRIPCION_EMPRESA_MAX,
+  FONDO_LOGIN_URL_MAX,
+  LOGO_URL_MAX,
+  RAZON_SOCIAL_MAX,
   RIF_MAX,
+  TITULO_PLATAFORMA_MAX,
   WHATSAPP_VENTAS_MAX,
   validarConfigSitio,
   type ErroresConfigSitio,
 } from "@/lib/validarConfigSitio";
 
-const VACIA: ConfigSitio = { whatsappVentas: null, descripcionEmpresa: null, rif: null };
+const VACIA: ConfigSitio = {
+  whatsappVentas: null,
+  descripcionEmpresa: null,
+  rif: null,
+  fondoLoginUrl: null,
+  logoUrl: null,
+  logoVisible: true,
+  razonSocial: "",
+  tituloPlataforma: null,
+};
+const TIPOS_IMAGEN_FONDO = "image/png,image/jpeg,image/webp";
+const TIPOS_IMAGEN_LOGO = "image/png,image/svg+xml,image/webp";
 
 // Datos operativos que antes solo se podían cambiar desde Vercel (variable
 // de entorno) o estaban fijos en el código (Footer.tsx) — Propuesta 10.
@@ -30,15 +47,16 @@ export function ConfiguracionForm() {
   const [errores, setErrores] = useState<ErroresConfigSitio>({});
   const [cargandoInicial, setCargandoInicial] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  const [subiendoFondo, setSubiendoFondo] = useState(false);
+  const [subiendoLogo, setSubiendoLogo] = useState(false);
 
   useEffect(() => {
     let cancelado = false;
     (async () => {
       try {
-        const resp = await fetch("/api/admin/config");
-        const data = (await resp.json()) as { ok: boolean; config?: ConfigSitio; mensaje?: string };
-        if (!resp.ok || !data.ok || !data.config) {
-          throw new Error(data.mensaje ?? "No se pudo cargar la configuración actual.");
+        const { resp, data } = await fetchJson<{ ok: boolean; config?: ConfigSitio; mensaje?: string }>("/api/admin/config");
+        if (!resp.ok || !data || !data.ok || !data.config) {
+          throw new Error(data?.mensaje ?? "No se pudo cargar la configuración actual.");
         }
         if (!cancelado) setGuardado(data.config);
       } catch (err) {
@@ -60,6 +78,11 @@ export function ConfiguracionForm() {
   }
 
   function cancelarEdicion() {
+    // Una imagen recién subida en esta edición (distinta de lo ya guardado)
+    // nunca llegó a persistirse en ningún lado — se descarta del bucket acá,
+    // si no queda huérfana para siempre (ver la nota en lib/apiCliente.ts).
+    if (borrador.logoUrl && borrador.logoUrl !== guardado.logoUrl) descartarImagenSubida(borrador.logoUrl);
+    if (borrador.fondoLoginUrl && borrador.fondoLoginUrl !== guardado.fondoLoginUrl) descartarImagenSubida(borrador.fondoLoginUrl);
     setEditando(false);
     setErrores({});
   }
@@ -72,11 +95,78 @@ export function ConfiguracionForm() {
     if (errores[clave as keyof ErroresConfigSitio]) setErrores({ ...errores, [clave]: undefined });
   }
 
+  // Aparte de campo(): logoVisible es boolean, no texto — no hay validación
+  // de campo asociada (nunca produce un error de formulario).
+  function toggleLogoVisible() {
+    setBorrador({ ...borrador, logoVisible: !borrador.logoVisible });
+  }
+
+  // La imagen se sube ENSEGUIDA (no tiene sentido "borrador" para un
+  // archivo) — lo que queda pendiente de "Guardar cambios" es solo la URL
+  // resultante, igual que si el admin la hubiera pegado a mano en el campo
+  // de texto. Mismo patrón que subirImagen en useColeccionesAdmin.
+  async function subirFondo(archivo: File) {
+    setSubiendoFondo(true);
+    try {
+      const formData = new FormData();
+      formData.append("archivo", archivo);
+      const { resp, data } = await fetchJson<{ ok: boolean; url?: string; mensaje?: string }>("/api/admin/config/fondo-login", {
+        method: "POST",
+        body: formData,
+      });
+      if (!resp.ok || !data || !data.ok || !data.url) {
+        toast.error(data?.mensaje ?? "No se pudo subir la imagen.");
+        return;
+      }
+      // Reemplaza una subida de ESTA MISMA edición que todavía no se guardó
+      // — esa queda huérfana si no se descarta acá (la de más abajo,
+      // cancelarEdicion, cubre el caso de cancelar en vez de reemplazar).
+      if (borrador.fondoLoginUrl && borrador.fondoLoginUrl !== guardado.fondoLoginUrl) descartarImagenSubida(borrador.fondoLoginUrl);
+      campo("fondoLoginUrl", data.url);
+      toast.success("Imagen subida — no te olvides de \"Guardar cambios\".");
+    } catch (err) {
+      logError("ConfiguracionForm.subirFondo", err, "No se pudo conectar con el servidor para subir la imagen.");
+      toast.error("No se pudo conectar con el servidor.");
+    } finally {
+      setSubiendoFondo(false);
+    }
+  }
+
+  // Igual que subirFondo: se sube enseguida, lo pendiente de "Guardar
+  // cambios" es solo la URL resultante en el campo logoUrl.
+  async function subirLogo(archivo: File) {
+    setSubiendoLogo(true);
+    try {
+      const formData = new FormData();
+      formData.append("archivo", archivo);
+      const { resp, data } = await fetchJson<{ ok: boolean; url?: string; mensaje?: string }>("/api/admin/config/logo", {
+        method: "POST",
+        body: formData,
+      });
+      if (!resp.ok || !data || !data.ok || !data.url) {
+        toast.error(data?.mensaje ?? "No se pudo subir el logo.");
+        return;
+      }
+      if (borrador.logoUrl && borrador.logoUrl !== guardado.logoUrl) descartarImagenSubida(borrador.logoUrl);
+      campo("logoUrl", data.url);
+      toast.success("Logo subido — no te olvides de \"Guardar cambios\".");
+    } catch (err) {
+      logError("ConfiguracionForm.subirLogo", err, "No se pudo conectar con el servidor para subir el logo.");
+      toast.error("No se pudo conectar con el servidor.");
+    } finally {
+      setSubiendoLogo(false);
+    }
+  }
+
   async function guardar() {
     const campos = {
       whatsappVentas: (borrador.whatsappVentas ?? "").trim(),
       descripcionEmpresa: (borrador.descripcionEmpresa ?? "").trim(),
       rif: (borrador.rif ?? "").trim(),
+      fondoLoginUrl: (borrador.fondoLoginUrl ?? "").trim(),
+      logoUrl: (borrador.logoUrl ?? "").trim(),
+      razonSocial: (borrador.razonSocial ?? "").trim(),
+      tituloPlataforma: (borrador.tituloPlataforma ?? "").trim(),
     };
 
     const erroresActuales = validarConfigSitio(campos);
@@ -92,17 +182,18 @@ export function ConfiguracionForm() {
 
     setGuardando(true);
     try {
-      const resp = await fetch("/api/admin/config", {
+      const { resp, data } = await fetchJson<{ ok: boolean; config?: ConfigSitio; mensaje?: string }>("/api/admin/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(campos),
+        // logoVisible no pasa por validarConfigSitio (es boolean, no texto) —
+        // se manda tal cual desde el borrador.
+        body: JSON.stringify({ ...campos, logoVisible: borrador.logoVisible }),
       });
-      const data = (await resp.json()) as { ok: boolean; config?: ConfigSitio; mensaje?: string };
-      if (!resp.ok || !data.ok || !data.config) {
+      if (!resp.ok || !data || !data.ok || !data.config) {
         // Esto solo debería pasar por algo que el form no pudo anticipar
         // (ej. se cayó la conexión a mitad de camino) — la validación de
         // campo ya cubrió los casos previsibles antes de llegar acá.
-        toast.error(data.mensaje ?? "No se pudo guardar la configuración.");
+        toast.error(data?.mensaje ?? "No se pudo guardar la configuración.");
         return;
       }
       setGuardado(data.config);
@@ -122,8 +213,7 @@ export function ConfiguracionForm() {
         <div>
           <h2 className="text-sm font-semibold text-ink-900">Datos generales</h2>
           <p className="mt-1 text-xs text-ink-500">
-            Número de WhatsApp de ventas y datos de contacto que se muestran en el catálogo público — antes solo se
-            podían cambiar desde Vercel.
+            Número de WhatsApp de ventas y datos de contacto que se muestran en el catálogo público.
           </p>
         </div>
         {!cargandoInicial && !editando && (
@@ -149,12 +239,140 @@ export function ConfiguracionForm() {
         // ni ambigüedad sobre si esto es un formulario en blanco o valores
         // ya guardados.
         <div className="mt-4 flex flex-col gap-3">
+          <FilaLectura etiqueta="Razón social" valor={guardado.razonSocial} placeholder="—" />
+          <FilaLectura etiqueta="Título de la plataforma" valor={guardado.tituloPlataforma} placeholder="Sin configurar — usa “Catálogo Mayorista”" />
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs font-medium text-ink-500">Logo de marca</span>
+            {guardado.logoUrl ? (
+              <div className="mt-1 flex items-center gap-2">
+                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-ink-200 bg-paper p-1">
+                  <ImagenProducto src={guardado.logoUrl} alt="Logo de marca" className="h-full w-full" ajuste="cubrir" sizes="56px" />
+                </div>
+                <span className="text-xs text-ink-500">{guardado.logoVisible ? "Visible en login y header" : "Oculto (archivo conservado)"}</span>
+              </div>
+            ) : (
+              <span className="text-sm italic text-warning-600">Sin configurar — no se muestra ningún logo</span>
+            )}
+          </div>
           <FilaLectura etiqueta="WhatsApp de ventas" valor={guardado.whatsappVentas} placeholder="Sin configurar — usa el número de Vercel" />
           <FilaLectura etiqueta="Descripción de la empresa" valor={guardado.descripcionEmpresa} placeholder="Sin configurar — usa el texto por defecto" />
           <FilaLectura etiqueta="RIF" valor={guardado.rif} placeholder="Sin configurar — usa el RIF por defecto" />
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs font-medium text-ink-500">Fondo del login</span>
+            {guardado.fondoLoginUrl ? (
+              <div className="mt-1 h-24 w-full max-w-xs overflow-hidden rounded-lg border border-ink-200">
+                <ImagenProducto src={guardado.fondoLoginUrl} alt="Fondo del login" className="h-full w-full" sizes="320px" />
+              </div>
+            ) : (
+              <span className="text-sm italic text-ink-500">Sin configurar — usa el degradé por defecto</span>
+            )}
+          </div>
         </div>
       ) : (
         <div className="mt-4 flex flex-col gap-4">
+          <Campo
+            id="config-razonSocial"
+            etiqueta="Razón social"
+            ayuda="Nombre legal de la empresa — aparece en el copyright del pie de página y en cualquier otro lugar que hoy dice “Calzados Mesvol, C.A.” fijo."
+            value={borrador.razonSocial ?? ""}
+            onChange={(v) => campo("razonSocial", v)}
+            maxLength={RAZON_SOCIAL_MAX}
+            error={errores.razonSocial}
+          />
+
+          <Campo
+            id="config-tituloPlataforma"
+            etiqueta="Título de la plataforma"
+            ayuda="Se muestra al lado del logo en el header del catálogo público y en la barra superior del panel admin. Vacío = usa “Catálogo Mayorista”."
+            value={borrador.tituloPlataforma ?? ""}
+            onChange={(v) => campo("tituloPlataforma", v)}
+            maxLength={TITULO_PLATAFORMA_MAX}
+            error={errores.tituloPlataforma}
+          />
+
+          <div>
+            <div className="mb-1 flex items-baseline justify-between gap-2">
+              <span className="text-xs font-medium text-ink-900">Logo de marca</span>
+              <span className={`text-[11px] tabular-nums ${(borrador.logoUrl ?? "").length >= LOGO_URL_MAX ? "text-danger-600" : "text-ink-500"}`}>
+                {(borrador.logoUrl ?? "").length}/{LOGO_URL_MAX}
+              </span>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-ink-200 bg-paper p-1">
+                <ImagenProducto src={borrador.logoUrl ?? undefined} alt="" className="h-full w-full" sizes="64px" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <input
+                  id="config-logoUrl"
+                  type="url"
+                  placeholder="https://…"
+                  value={borrador.logoUrl ?? ""}
+                  onChange={(e) => campo("logoUrl", e.target.value)}
+                  maxLength={LOGO_URL_MAX}
+                  aria-invalid={Boolean(errores.logoUrl)}
+                  aria-describedby={errores.logoUrl ? "config-logoUrl-error" : "config-logoUrl-ayuda"}
+                  className={`w-full rounded-lg border bg-paper px-3 py-2 text-sm text-ink-900 focus:border-accent-600 ${
+                    errores.logoUrl ? "border-danger-600" : "border-ink-200"
+                  }`}
+                />
+                <input
+                  type="file"
+                  accept={TIPOS_IMAGEN_LOGO}
+                  disabled={subiendoLogo}
+                  onChange={(e) => {
+                    const archivo = e.target.files?.[0];
+                    if (archivo) subirLogo(archivo);
+                    e.target.value = "";
+                  }}
+                  className="mt-2 block w-full text-xs text-ink-700 file:mr-2 file:rounded-full file:border-0 file:bg-ink-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink-900 hover:file:bg-ink-200"
+                />
+              </div>
+            </div>
+            {errores.logoUrl ? (
+              <p id="config-logoUrl-error" className="mt-1 text-xs text-danger-600">
+                {errores.logoUrl}
+              </p>
+            ) : (
+              <p id="config-logoUrl-ayuda" className="mt-1 text-[11px] text-ink-500">
+                {subiendoLogo
+                  ? "Subiendo…"
+                  : "Recomendado: PNG o SVG con fondo transparente, relación 1:1 o formato horizontal 200×50px, máx. 2MB."}
+              </p>
+            )}
+
+            {/* Un solo elemento interactivo (antes: <button> anidado dentro
+                de <label> — el navegador reenvía el click del label AL
+                control anidado, así que cada click disparaba onClick dos
+                veces y el switch quedaba "atascado" sin cambiar). El texto
+                va adentro del propio <button> como accessible name, no en
+                un <label> aparte. */}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={borrador.logoVisible}
+              onClick={toggleLogoVisible}
+              className="mt-3 flex items-center gap-2.5 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2"
+            >
+              <span
+                className={`relative inline-block h-6 w-11 shrink-0 overflow-hidden rounded-full transition-colors ${
+                  borrador.logoVisible ? "bg-ink-900" : "bg-ink-200"
+                }`}
+              >
+                <span
+                  className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    borrador.logoVisible ? "translate-x-[20px]" : "translate-x-0"
+                  }`}
+                />
+              </span>
+              <span className="text-sm text-ink-900">
+                {borrador.logoVisible ? "Logo visible" : "Logo oculto"}
+                <span className="ml-1.5 text-xs text-ink-500">
+                  {borrador.logoVisible ? "— se muestra en login y header" : "— archivo conservado, no se renderiza"}
+                </span>
+              </span>
+            </button>
+          </div>
+
           <Campo
             id="config-whatsappVentas"
             etiqueta="WhatsApp de ventas"
@@ -183,6 +401,57 @@ export function ConfiguracionForm() {
             maxLength={RIF_MAX}
             error={errores.rif}
           />
+
+          <div>
+            <EncabezadoCampo
+              id="config-fondoLoginUrl"
+              etiqueta="Fondo del login"
+              valor={borrador.fondoLoginUrl ?? ""}
+              maxLength={FONDO_LOGIN_URL_MAX}
+            />
+            <div className="flex items-start gap-3">
+              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-ink-200">
+                <ImagenProducto src={borrador.fondoLoginUrl ?? undefined} alt="" className="h-full w-full" sizes="64px" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <input
+                  id="config-fondoLoginUrl"
+                  type="url"
+                  placeholder="https://…"
+                  value={borrador.fondoLoginUrl ?? ""}
+                  onChange={(e) => campo("fondoLoginUrl", e.target.value)}
+                  maxLength={FONDO_LOGIN_URL_MAX}
+                  aria-invalid={Boolean(errores.fondoLoginUrl)}
+                  aria-describedby={errores.fondoLoginUrl ? "config-fondoLoginUrl-error" : "config-fondoLoginUrl-ayuda"}
+                  className={`w-full rounded-lg border bg-paper px-3 py-2 text-sm text-ink-900 focus:border-accent-600 ${
+                    errores.fondoLoginUrl ? "border-danger-600" : "border-ink-200"
+                  }`}
+                />
+                <input
+                  type="file"
+                  accept={TIPOS_IMAGEN_FONDO}
+                  disabled={subiendoFondo}
+                  onChange={(e) => {
+                    const archivo = e.target.files?.[0];
+                    if (archivo) subirFondo(archivo);
+                    e.target.value = "";
+                  }}
+                  className="mt-2 block w-full text-xs text-ink-700 file:mr-2 file:rounded-full file:border-0 file:bg-ink-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink-900 hover:file:bg-ink-200"
+                />
+              </div>
+            </div>
+            {errores.fondoLoginUrl ? (
+              <p id="config-fondoLoginUrl-error" className="mt-1 text-xs text-danger-600">
+                {errores.fondoLoginUrl}
+              </p>
+            ) : (
+              <p id="config-fondoLoginUrl-ayuda" className="mt-1 text-[11px] text-ink-500">
+                {subiendoFondo
+                  ? "Subiendo…"
+                  : "Pegá una URL o subí un archivo (PNG, JPG o WEBP). Se ve mejor en 1920×1080px o relación 16:9 — otra proporción se recorta al centro. Vacío = se usa el degradé por defecto."}
+              </p>
+            )}
+          </div>
         </div>
       )}
 

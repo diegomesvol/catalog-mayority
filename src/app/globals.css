@@ -87,6 +87,26 @@ body {
   border-radius: 4px;
 }
 
+/* cursor: pointer explícito en todo elemento cliqueable (estilo Shopify) —
+   sin esto, un <button> o <summary> con display:flex/inline-flex a veces
+   hereda "cursor: default" del navegador en vez de "pointer" según el
+   agente de usuario, y un elemento con role="button" nunca lo trae solo.
+   Deshabilitado/no-permitido queda con su propio cursor, no "pointer". */
+button:not(:disabled, [aria-disabled="true"]),
+[role="button"]:not([aria-disabled="true"]),
+a[href],
+label[for],
+select:not(:disabled),
+summary {
+  cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled="true"],
+select:disabled {
+  cursor: not-allowed;
+}
+
 @layer utilities {
   .no-scrollbar {
     scrollbar-width: none;
@@ -109,6 +129,13 @@ body {
     background-image: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
     animation: skeleton-shimmer 1.6s infinite;
   }
+
+  /* Feedback de "no podés hacer esto todavía" (ej. botón "Realizar pedido"
+     con el perfil incompleto, ver CarritoDrawer/usePedidoWhatsApp) — una
+     sola pasada, no en loop como el shimmer de arriba. */
+  .animate-shake {
+    animation: shake 0.4s ease-in-out;
+  }
 }
 
 @keyframes skeleton-shimmer {
@@ -117,8 +144,31 @@ body {
   }
 }
 
+@keyframes shake {
+  10%,
+  90% {
+    transform: translateX(-1px);
+  }
+  20%,
+  80% {
+    transform: translateX(2px);
+  }
+  30%,
+  50%,
+  70% {
+    transform: translateX(-4px);
+  }
+  40%,
+  60% {
+    transform: translateX(4px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .skeleton::after {
+    animation: none;
+  }
+  .animate-shake {
     animation: none;
   }
 }

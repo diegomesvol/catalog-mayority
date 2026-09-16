@@ -74,9 +74,40 @@ function separarUrls(valor: unknown): string[] {
   return Array.from(new Set(texto.split(",").map((u) => u.trim()).filter(Boolean)));
 }
 
+/**
+ * Interpreta comas Y puntos como agrupador de miles O decimal, según cuál
+ * patrón calza: antes solo se limpiaban comas asumiendo que SIEMPRE eran
+ * miles — un precio cargado como "12,50" (coma decimal) se leía como 1250,
+ * sin error, directo al catálogo publicado.
+ *  - Si aparecen los dos separadores, el que está más a la derecha es el
+ *    decimal ("1.250,50" -> 1250.5; "1,250.50" -> 1250.5).
+ *  - Si aparece solo coma: se asume decimal cuando NO son grupos de 3
+ *    dígitos ("12,50" / "12,5" -> decimal), miles cuando sí lo son
+ *    ("1,250" -> 1250, "1,250,000" -> 1250000) — un decimal solo puede
+ *    tener una coma, así que 2+ comas siempre son miles.
+ */
 function aNumero(valor: unknown): number | null {
   if (valor === null || valor === undefined || valor === "") return null;
-  const n = typeof valor === "number" ? valor : Number(String(valor).replace(/,/g, "").trim());
+  if (typeof valor === "number") return Number.isFinite(valor) ? valor : null;
+
+  const texto = String(valor).trim();
+  if (!texto) return null;
+
+  let normalizado: string;
+  if (texto.includes(",") && texto.includes(".")) {
+    normalizado =
+      texto.lastIndexOf(",") > texto.lastIndexOf(".")
+        ? texto.replace(/\./g, "").replace(",", ".")
+        : texto.replace(/,/g, "");
+  } else if (texto.includes(",")) {
+    const partes = texto.split(",");
+    const esDecimal = partes.length === 2 && partes[1].length !== 3;
+    normalizado = esDecimal ? texto.replace(",", ".") : texto.replace(/,/g, "");
+  } else {
+    normalizado = texto;
+  }
+
+  const n = Number(normalizado);
   return Number.isFinite(n) ? n : null;
 }
 
@@ -300,7 +331,10 @@ function idsUnicos() {
   };
 }
 
-function slugify(texto: string): string {
+// export: lib/blob.ts la reusa para reconstruir el mismo id de curva
+// ("slugify(serie) || 'unico'") al leer el catálogo desde Supabase — mismo
+// criterio acá y ahí, sin duplicar la función.
+export function slugify(texto: string): string {
   return texto
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "") // quita diacríticos (tildes) tras normalizar
@@ -328,7 +362,7 @@ export function transformarFilas(filas: FilaOrigen[], totalFilasOrigen: number):
   // curvas idénticas.
   const gruposCurva = new Map<string, FilaValidada[]>();
   for (const f of validas) {
-    const clave = `${f.modelo} ${f.color} ${f.serie}`;
+    const clave = `${f.modelo} ${f.color} ${f.serie}`;
     const arr = gruposCurva.get(clave);
     if (arr) arr.push(f);
     else gruposCurva.set(clave, [f]);
@@ -367,7 +401,7 @@ export function transformarFilas(filas: FilaOrigen[], totalFilasOrigen: number):
   // foto y seguir viéndose en el catálogo).
   const gruposColor = new Map<string, CurvaConstruida[]>();
   for (const c of curvasConstruidas) {
-    const clave = `${c.modelo} ${c.color}`;
+    const clave = `${c.modelo} ${c.color}`;
     const arr = gruposColor.get(clave);
     if (arr) arr.push(c);
     else gruposColor.set(clave, [c]);

@@ -1,129 +1,233 @@
-// Acceso al catálogo en Vercel Blob. No hay base de datos: todo vive en JSON.
-//
-// Claves fijas dentro del store de Blob:
-//  - catalogo.json          -> catálogo publicado, el que lee el sitio público
-//  - catalogo-backup.json   -> respaldo de un solo paso atrás del catálogo anterior
-//  - catalogo-pending.json  -> resultado parseado de la última carga del admin,
-//                              a la espera de que confirme "Reemplazar catálogo"
+// Catálogo, guía de tallas, colecciones y config del sitio — todo vive en
+// Postgres/Supabase (ver supabase/migrations/20260910000000_init_schema.sql
+// y siguientes) y las imágenes en el bucket público de Storage. Ya no
+// depende de Vercel Blob (migración completa).
 
-import { del, get, list, put } from "@vercel/blob";
-import type { Catalogo, Coleccion, ConfigSitio, EntradaHistorial, GuiaTallas, ResumenImportacion } from "./types";
-import { logError, pistaBlob } from "./logger";
+import { cache } from "react";
+import { randomUUID } from "node:crypto";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { crearClienteServidor } from "./supabase";
+import { slugify } from "./transform";
+import type {
+  Catalogo,
+  Coleccion,
+  ConfigSitio,
+  EntradaHistorial,
+  GuiaTallas,
+  LogoFooter,
+  Producto,
+  ResumenImportacion,
+} from "./types";
+import { logError } from "./logger";
 
-const CATALOGO_KEY = "catalogo.json";
-const BACKUP_KEY = "catalogo-backup.json";
-const PENDING_KEY = "catalogo-pending.json";
-// El resumen (incluye la cantidad de errores/filas excluidas) de la carga
-// pendiente — separado del catálogo pendiente en sí porque ResumenImportacion
-// no es parte de Catalogo. Se usa para construir la entrada de historial al
-// confirmar (ver agregarEntradaHistorial más abajo).
-const PENDING_RESUMEN_KEY = "catalogo-pending-resumen.json";
+// =============================================================================
+// Catálogo (Postgres) — cargas / catalogo_activo / productos / variantes_color
+// / curvas / tallas. Ver supabase/migrations para el esquema y las políticas
+// RLS (puede_escribir_catalogo(), publico_lee_productos, etc.)
+// =============================================================================
 
-// Guía de tallas: NO es parte del catálogo (no cambia con cada carga de
-// Excel) — es una config aparte que el admin sube una sola vez desde su
-// propio apartado del panel. Ver GuiaTallasConfig.tsx y
-// /api/admin/guia-tallas.
-const GUIA_TALLAS_KEY = "guia-tallas.json";
+interface FilaTallaDB {
+  talla: string;
+  disponible: number;
+  disponible_fisico: number;
+  por_bulto: number | null;
+}
 
-// Colecciones de la home (tarjetas "Volpe", "Kriza + Accesorios", etc.) —
-// mismo criterio que la guía de tallas: no es parte del catálogo (no cambia
-// con cada carga de Excel), el admin la administra aparte desde
-// /admin/colecciones. Ver lib/coleccion.ts para el filtro/conteo y
-// ColeccionesHome.tsx para el render público.
-const COLECCIONES_KEY = "colecciones.json";
+interface FilaCurvaDB {
+  rango: string;
+  codigo_sap: string;
+  cantidad_por_bulto: number;
+  tallas: FilaTallaDB[];
+}
 
-// Archivo crudo (.csv/.xlsx) de la carga que generó el catálogo publicado —
-// para que el admin pueda descargar "el archivo que se usó" sin tener que
-// guardar su propia copia local. Mismo patrón pendiente->confirmado que el
-// catálogo: se guarda "pending" al subir, se promueve al confirmar.
-const ARCHIVO_ORIGINAL_KEY = "catalogo-original.bin";
-const ARCHIVO_ORIGINAL_META_KEY = "catalogo-original-meta.json";
-const ARCHIVO_ORIGINAL_PENDIENTE_KEY = "catalogo-pending-original.bin";
-const ARCHIVO_ORIGINAL_PENDIENTE_META_KEY = "catalogo-pending-original-meta.json";
+interface FilaVarianteDB {
+  color: string;
+  precio: number | string; // numeric de Postgres puede volver como string
+  promocion: boolean;
+  fotos: string[];
+  curvas: FilaCurvaDB[];
+}
 
-async function leerJson<T>(key: string): Promise<T | null> {
-  try {
-    // useCache: true (antes false) — cada visita a "/" dispara hasta 3
-    // lecturas de acá (catálogo, colecciones, config) sin ningún caché de
-    // por medio, lo que agota rápido la cuota de OPERACIONES del plan
-    // Hobby de Vercel Blob con tráfico real. El caché propio de Blob se
-    // invalida solo al reescribir la misma key con put()/allowOverwrite
-    // (ver escribirJson), así que esto no cambia la frescura real: el
-    // catálogo publicado sigue reflejándose apenas el admin confirma un
-    // reemplazo, solo deja de pegarle a Blob en cada carga de página.
-    const resultado = await get(key, { access: "private", useCache: true });
-    if (!resultado || resultado.statusCode !== 200) return null;
-    const texto = await new Response(resultado.stream).text();
-    return JSON.parse(texto) as T;
-  } catch (err) {
-    const mensaje = err instanceof Error ? err.message : String(err);
-    // BlobNotFoundError es normal (todavía no existe ese archivo en Blob) —
-    // cualquier otro error sí se registra, porque puede estar tapando un
-    // problema real de configuración (por ejemplo, credenciales).
-    if (!/BlobNotFoundError|not_found/i.test(mensaje)) {
-      logError(`lib/blob.leerJson(${key})`, err, pistaBlob(mensaje));
+interface FilaProductoDB {
+  slug: string;
+  modelo: string;
+  marca: string;
+  genero: string;
+  rubro: string;
+  linea: string | null;
+  codigo_modelo: string | null;
+  material_exterior: string | null;
+  material_interior: string | null;
+  material_suela: string | null;
+  tipo_calzado: string | null;
+  variantes_color: FilaVarianteDB[];
+}
+
+function mapearProductoDesdeDB(p: FilaProductoDB): Producto {
+  const tieneMateriales = p.material_exterior || p.material_interior || p.material_suela || p.tipo_calzado;
+  return {
+    id: p.slug,
+    modelo: p.modelo,
+    marca: p.marca,
+    genero: p.genero,
+    rubro: p.rubro,
+    linea: p.linea ?? undefined,
+    codigoModelo: p.codigo_modelo ?? undefined,
+    materiales: tieneMateriales
+      ? {
+          exterior: p.material_exterior ?? undefined,
+          interior: p.material_interior ?? undefined,
+          suela: p.material_suela ?? undefined,
+          tipoCalzado: p.tipo_calzado ?? undefined,
+        }
+      : undefined,
+    colores: (p.variantes_color ?? []).map((c) => ({
+      color: c.color,
+      precio: Number(c.precio),
+      promocion: c.promocion,
+      fotos: c.fotos ?? [],
+      // Mismo criterio que transform.ts al armar el catálogo original — ver
+      // la nota ahí (slugify exportado a propósito para esto).
+      curvas: (c.curvas ?? []).map((curva) => ({
+        id: slugify(curva.rango) || "unico",
+        rango: curva.rango,
+        codigoSap: curva.codigo_sap,
+        cantidadPorBulto: curva.cantidad_por_bulto,
+        tallas: (curva.tallas ?? []).map((t) => ({
+          talla: t.talla,
+          disponible: t.disponible,
+          disponibleFisico: t.disponible_fisico,
+          porBulto: t.por_bulto ?? undefined,
+        })),
+      })),
+    })),
+  };
+}
+
+const SELECT_ARBOL_PRODUCTOS = `
+  slug, modelo, marca, genero, rubro, linea, codigo_modelo,
+  material_exterior, material_interior, material_suela, tipo_calzado,
+  variantes_color (
+    color, precio, promocion, fotos,
+    curvas (
+      rango, codigo_sap, cantidad_por_bulto,
+      tallas ( talla, disponible, disponible_fisico, por_bulto )
+    )
+  )
+`;
+
+async function construirCatalogoDesdeCarga(supabase: SupabaseClient, cargaId: string): Promise<Catalogo | null> {
+  const { data: carga, error: errorCarga } = await supabase
+    .from("cargas")
+    .select("total_productos, total_variantes, creado_en")
+    .eq("id", cargaId)
+    .maybeSingle();
+  if (errorCarga) throw errorCarga;
+  if (!carga) return null;
+
+  const { data: productos, error } = await supabase
+    .from("productos")
+    .select(SELECT_ARBOL_PRODUCTOS)
+    .eq("carga_id", cargaId);
+  if (error) throw error;
+
+  return {
+    productos: ((productos ?? []) as unknown as FilaProductoDB[]).map(mapearProductoDesdeDB),
+    generadoEn: carga.creado_en as string,
+    totalProductos: carga.total_productos as number,
+    totalVariantes: carga.total_variantes as number,
+  };
+}
+
+// Ids generados en el cliente (no RETURNING): así los hijos pueden
+// referenciar el id del padre sin depender del orden en que Postgres
+// devuelva las filas de un insert múltiple.
+async function insertarEnLotes(supabase: SupabaseClient, tabla: string, filas: Record<string, unknown>[], tamanoLote = 500) {
+  for (let i = 0; i < filas.length; i += tamanoLote) {
+    const lote = filas.slice(i, i + tamanoLote);
+    const { error } = await supabase.from(tabla).insert(lote);
+    if (error) throw error;
+  }
+}
+
+async function insertarArbolCatalogo(supabase: SupabaseClient, cargaId: string, productos: Producto[]): Promise<void> {
+  const filasProductos: Record<string, unknown>[] = [];
+  const filasVariantes: Record<string, unknown>[] = [];
+  const filasCurvas: Record<string, unknown>[] = [];
+  const filasTallas: Record<string, unknown>[] = [];
+
+  for (const p of productos) {
+    const idProducto = randomUUID();
+    filasProductos.push({
+      id: idProducto,
+      carga_id: cargaId,
+      slug: p.id,
+      modelo: p.modelo,
+      marca: p.marca,
+      genero: p.genero,
+      rubro: p.rubro,
+      linea: p.linea ?? null,
+      codigo_modelo: p.codigoModelo ?? null,
+      material_exterior: p.materiales?.exterior ?? null,
+      material_interior: p.materiales?.interior ?? null,
+      material_suela: p.materiales?.suela ?? null,
+      tipo_calzado: p.materiales?.tipoCalzado ?? null,
+    });
+
+    for (const c of p.colores) {
+      const idVariante = randomUUID();
+      filasVariantes.push({
+        id: idVariante,
+        producto_id: idProducto,
+        color: c.color,
+        precio: c.precio,
+        promocion: c.promocion,
+        fotos: c.fotos,
+      });
+
+      for (const curva of c.curvas) {
+        const idCurva = randomUUID();
+        filasCurvas.push({
+          id: idCurva,
+          variante_id: idVariante,
+          rango: curva.rango,
+          codigo_sap: curva.codigoSap,
+          cantidad_por_bulto: curva.cantidadPorBulto,
+        });
+
+        for (const t of curva.tallas) {
+          filasTallas.push({
+            id: randomUUID(),
+            curva_id: idCurva,
+            talla: t.talla,
+            disponible: t.disponible,
+            disponible_fisico: t.disponibleFisico,
+            por_bulto: t.porBulto ?? null,
+          });
+        }
+      }
     }
+  }
+
+  await insertarEnLotes(supabase, "productos", filasProductos);
+  await insertarEnLotes(supabase, "variantes_color", filasVariantes);
+  await insertarEnLotes(supabase, "curvas", filasCurvas);
+  await insertarEnLotes(supabase, "tallas", filasTallas);
+}
+
+// cache() (React): generateMetadata() y el Page de /producto/[id] llaman
+// esto por separado dentro de la misma request — sin esto, cada visita a esa
+// ruta traía el catálogo entero DOS veces.
+export const leerCatalogoPublico = cache(async (): Promise<Catalogo | null> => {
+  const supabase = await crearClienteServidor();
+  const { data: activo, error } = await supabase.from("catalogo_activo").select("carga_id").eq("id", true).maybeSingle();
+  if (error) {
+    logError("lib/blob.leerCatalogoPublico", error);
     return null;
   }
-}
-
-async function escribirJson(key: string, data: unknown): Promise<void> {
-  try {
-    await put(key, JSON.stringify(data), {
-      access: "private",
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType: "application/json",
-    });
-  } catch (err) {
-    const mensaje = err instanceof Error ? err.message : String(err);
-    logError(`lib/blob.escribirJson(${key})`, err, pistaBlob(mensaje));
-    throw err;
-  }
-}
-
-async function leerBinario(key: string): Promise<ArrayBuffer | null> {
-  try {
-    // Mismo motivo que en leerJson — reduce operaciones de Blob sin perder
-    // frescura, porque se invalida solo al reescribir la misma key.
-    const resultado = await get(key, { access: "private", useCache: true });
-    if (!resultado || resultado.statusCode !== 200) return null;
-    return await new Response(resultado.stream).arrayBuffer();
-  } catch (err) {
-    const mensaje = err instanceof Error ? err.message : String(err);
-    if (!/BlobNotFoundError|not_found/i.test(mensaje)) {
-      logError(`lib/blob.leerBinario(${key})`, err, pistaBlob(mensaje));
-    }
-    return null;
-  }
-}
-
-async function escribirBinario(key: string, data: ArrayBuffer, contentType: string): Promise<void> {
-  try {
-    await put(key, data, {
-      access: "private",
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType,
-    });
-  } catch (err) {
-    const mensaje = err instanceof Error ? err.message : String(err);
-    logError(`lib/blob.escribirBinario(${key})`, err, pistaBlob(mensaje));
-    throw err;
-  }
-}
-
-async function borrarSiExiste(key: string): Promise<void> {
-  try {
-    await del(key);
-  } catch {
-    // No crítico — probablemente ya no existía (nada que borrar).
-  }
-}
-
-export async function leerCatalogoPublico(): Promise<Catalogo | null> {
-  return leerJson<Catalogo>(CATALOGO_KEY);
-}
+  if (!activo?.carga_id) return null;
+  return construirCatalogoDesdeCarga(supabase, activo.carga_id as string);
+});
 
 export interface MetaArchivoOriginal {
   nombreArchivo: string;
@@ -135,258 +239,432 @@ export interface ArchivoOriginal {
   meta: MetaArchivoOriginal;
 }
 
-/** Guarda el archivo crudo de la carga en curso, a la espera de que se confirme. */
-export async function guardarArchivoOriginalPendiente(bytes: ArrayBuffer, meta: MetaArchivoOriginal): Promise<void> {
-  try {
-    await escribirBinario(ARCHIVO_ORIGINAL_PENDIENTE_KEY, bytes, meta.contentType);
-    await escribirJson(ARCHIVO_ORIGINAL_PENDIENTE_META_KEY, meta);
-  } catch (err) {
-    // No debe tumbar la importación si esto falla — el catálogo en sí ya se
-    // guardó bien; solo se pierde la posibilidad de descargar el archivo.
-    const mensaje = err instanceof Error ? err.message : String(err);
-    logError("lib/blob.guardarArchivoOriginalPendiente", err, pistaBlob(mensaje));
-  }
-}
+const BUCKET_PRIVADO = "privado";
 
-/** Origen "Google Sheets": no hay archivo que guardar — limpia cualquier pendiente de una carga anterior. */
-export async function limpiarArchivoOriginalPendiente(): Promise<void> {
-  await borrarSiExiste(ARCHIVO_ORIGINAL_PENDIENTE_KEY);
-  await borrarSiExiste(ARCHIVO_ORIGINAL_PENDIENTE_META_KEY);
-}
-
-/** El archivo (.csv/.xlsx) que generó el catálogo actualmente publicado, si lo hay. */
-export async function leerArchivoOriginal(): Promise<ArchivoOriginal | null> {
-  const meta = await leerJson<MetaArchivoOriginal>(ARCHIVO_ORIGINAL_META_KEY);
-  if (!meta) return null;
-  const bytes = await leerBinario(ARCHIVO_ORIGINAL_KEY);
-  if (!bytes) return null;
-  return { bytes, meta };
-}
-
+/**
+ * Guarda el catálogo entero (árbol completo) como una nueva carga
+ * "pendiente" — reemplaza cualquier pendiente anterior (una sola a la vez,
+ * igual que el PENDING_KEY de antes). `origen` arranca en "archivo" porque
+ * la columna es NOT NULL y todavía no se sabe si hay archivo real o vino de
+ * un link de Google Sheets — se corrige solo, más abajo, en
+ * guardarArchivoOriginalPendiente() o limpiarArchivoOriginalPendiente() (el
+ * caller en api/admin/upload SIEMPRE llama a una de las dos después de esto).
+ */
 export async function guardarCatalogoPendiente(catalogo: Catalogo): Promise<void> {
-  await escribirJson(PENDING_KEY, catalogo);
-}
+  const supabase = await crearClienteServidor();
 
-export async function leerCatalogoPendiente(): Promise<Catalogo | null> {
-  return leerJson<Catalogo>(PENDING_KEY);
-}
-
-/** Resumen (errores incluidos) de la carga pendiente — ver PENDING_RESUMEN_KEY. */
-export async function guardarResumenPendiente(resumen: ResumenImportacion): Promise<void> {
-  await escribirJson(PENDING_RESUMEN_KEY, resumen);
-}
-
-export async function leerResumenPendiente(): Promise<ResumenImportacion | null> {
-  return leerJson<ResumenImportacion>(PENDING_RESUMEN_KEY);
-}
-
-/**
- * Promueve el catálogo pendiente a catálogo publicado:
- *  1) respalda el catálogo actual (si existe) en catalogo-backup.json,
- *  2) sobrescribe catalogo.json con el pendiente,
- *  3) limpia el pendiente,
- *  4) registra la carga en el historial (ver agregarEntradaHistorial).
- */
-export async function confirmarReemplazoCatalogo(): Promise<Catalogo> {
-  const pendiente = await leerCatalogoPendiente();
-  if (!pendiente) {
-    throw new Error("No hay un catálogo pendiente por confirmar. Vuelve a cargar el archivo.");
-  }
-
-  const actual = await leerCatalogoPublico();
-  if (actual) {
-    await escribirJson(BACKUP_KEY, actual);
-  }
-
-  await escribirJson(CATALOGO_KEY, pendiente);
-
-  // Se lee ANTES de limpiar el pendiente — es lo único que sabe cuántas
-  // filas se excluyeron en esta carga (Catalogo no lo trae).
-  const resumenPendiente = await leerResumenPendiente();
-  const metaArchivoPendiente = await leerJson<MetaArchivoOriginal>(ARCHIVO_ORIGINAL_PENDIENTE_META_KEY);
-
-  try {
-    await del(PENDING_KEY);
-  } catch (err) {
-    // no crítico: si falla la limpieza del pendiente, el catálogo ya quedó reemplazado
-    logError(
-      "lib/blob.confirmarReemplazoCatalogo (limpieza)",
-      err,
-      "No se pudo borrar catalogo-pending.json después de confirmar — no afecta el catálogo publicado, pero conviene borrarlo a mano desde Vercel → Storage.",
-    );
-  }
-
-  // Promueve el archivo original (.csv/.xlsx) igual que el catálogo. Si la
-  // carga vino de un link de Google Sheets no hay archivo pendiente — se
-  // borra el que hubiera quedado de una carga anterior, para no ofrecer
-  // para descargar un archivo que ya no corresponde al catálogo publicado.
-  try {
-    const metaPendiente = await leerJson<MetaArchivoOriginal>(ARCHIVO_ORIGINAL_PENDIENTE_META_KEY);
-    if (metaPendiente) {
-      const bytesPendiente = await leerBinario(ARCHIVO_ORIGINAL_PENDIENTE_KEY);
-      if (bytesPendiente) {
-        await escribirBinario(ARCHIVO_ORIGINAL_KEY, bytesPendiente, metaPendiente.contentType);
-        await escribirJson(ARCHIVO_ORIGINAL_META_KEY, metaPendiente);
-      }
-    } else {
-      await borrarSiExiste(ARCHIVO_ORIGINAL_KEY);
-      await borrarSiExiste(ARCHIVO_ORIGINAL_META_KEY);
+  const { data: viejo } = await supabase
+    .from("cargas")
+    .select("id, archivo_original_path")
+    .eq("estado", "pendiente")
+    .maybeSingle();
+  if (viejo) {
+    if (viejo.archivo_original_path) {
+      await supabase.storage.from(BUCKET_PRIVADO).remove([viejo.archivo_original_path as string]).catch(() => {});
     }
-  } catch (err) {
-    // no crítico: el catálogo ya quedó reemplazado igual, solo afecta la descarga del archivo
-    const mensaje = err instanceof Error ? err.message : String(err);
-    logError("lib/blob.confirmarReemplazoCatalogo (archivo original)", err, pistaBlob(mensaje));
-  } finally {
-    await limpiarArchivoOriginalPendiente();
-    await borrarSiExiste(PENDING_RESUMEN_KEY);
+    // Cascada (ON DELETE CASCADE): se lleva productos/variantes/curvas/tallas de esa carga.
+    // Antes el error se ignoraba: si el borrado fallaba (ej. otra sesión la
+    // estaba publicando en ese instante) quedaban DOS cargas "pendiente".
+    const { error: errorBorrado } = await supabase.from("cargas").delete().eq("id", viejo.id).eq("estado", "pendiente");
+    if (errorBorrado) throw errorBorrado;
   }
 
-  await agregarEntradaHistorial({
-    id: String(Date.now()),
-    fecha: new Date().toISOString(),
-    origen: metaArchivoPendiente ? "archivo" : "google_sheets",
-    nombreArchivo: metaArchivoPendiente?.nombreArchivo ?? null,
-    totalProductos: pendiente.totalProductos,
-    totalVariantes: pendiente.totalVariantes,
-    totalErrores: resumenPendiente?.errores.length ?? 0,
-    totalSinFoto: resumenPendiente?.errores.filter((e) => /sin foto/i.test(e.motivo)).length ?? 0,
-  });
+  const { data: nueva, error } = await supabase
+    .from("cargas")
+    .insert({ estado: "pendiente", origen: "archivo", total_productos: catalogo.totalProductos, total_variantes: catalogo.totalVariantes })
+    .select("id")
+    .single();
+  if (error) throw error;
 
-  return pendiente;
-}
-
-export async function leerCatalogoBackup(): Promise<Catalogo | null> {
-  return leerJson<Catalogo>(BACKUP_KEY);
-}
-
-/** Revierte manualmente al respaldo (catalogo-backup.json), si existe. */
-export async function revertirABackup(): Promise<Catalogo> {
-  const backup = await leerCatalogoBackup();
-  if (!backup) {
-    throw new Error("No hay respaldo disponible para revertir.");
-  }
-  await escribirJson(CATALOGO_KEY, backup);
-
-  // Un revert también es un cambio real al catálogo publicado — queda en el
-  // historial igual que una carga, con origen "revertir" para distinguirla
-  // (no hubo archivo ni errores propios: son los del catálogo restaurado).
-  await agregarEntradaHistorial({
-    id: String(Date.now()),
-    fecha: new Date().toISOString(),
-    origen: "revertir",
-    nombreArchivo: null,
-    totalProductos: backup.totalProductos,
-    totalVariantes: backup.totalVariantes,
-    totalErrores: 0,
-    totalSinFoto: 0,
-  });
-
-  return backup;
-}
-
-/** Config actual de la guía de tallas (instrucciones + tabla). Nunca falta: si no se configuró aún, ambos campos vienen en null. */
-export async function leerGuiaTallas(): Promise<GuiaTallas> {
-  return (await leerJson<GuiaTallas>(GUIA_TALLAS_KEY)) ?? { instrucciones: null, tabla: null };
-}
-
-export async function guardarGuiaTallas(guia: GuiaTallas): Promise<void> {
-  await escribirJson(GUIA_TALLAS_KEY, guia);
-}
-
-/**
- * Sube una imagen que el navegador del comprador necesita poder ver directo
- * (portada de colección, guía de tallas) — a diferencia del resto de las
- * claves de este archivo, que nunca salen del servidor.
- *
- * El store de Blob de este proyecto está configurado como PRIVADO (un store
- * es público o privado desde que se crea — no se puede convertir después),
- * así que subir con access:"public" falla siempre con "Cannot use public
- * access on a private store". La solución NO es crear un segundo store
- * público: se sube privado, igual que todo lo demás, y se sirve a través de
- * /api/imagenes/[...pathname] (ver ese route), que hace de puente
- * autenticado hacia Blob — el pathname ya trae sufijo aleatorio
- * (addRandomSuffix), así que es tan "no adivinable" como habría sido una
- * URL pública de Blob.
- */
-export async function subirImagenGuiaTallas(nombre: string, bytes: ArrayBuffer, contentType: string): Promise<string> {
-  const resultado = await put(`guia-tallas/${nombre}`, bytes, {
-    access: "private",
-    addRandomSuffix: true,
-    contentType,
-  });
-  return `/api/imagenes/${resultado.pathname}`;
-}
-
-/**
- * Lee una imagen subida por subirImagenColeccion/subirImagenGuiaTallas —
- * la usa /api/imagenes/[...pathname] para servirla (ver la nota grande más
- * arriba). Devuelve null si no existe (404 normal, no se loguea como error).
- */
-export async function leerImagenPublica(pathname: string): Promise<{ stream: ReadableStream<Uint8Array>; contentType: string } | null> {
   try {
-    const resultado = await get(pathname, { access: "private" });
-    if (!resultado || resultado.statusCode !== 200 || !resultado.stream) return null;
-    return { stream: resultado.stream, contentType: resultado.blob.contentType };
+    await insertarArbolCatalogo(supabase, nueva.id as string, catalogo.productos);
   } catch (err) {
-    const mensaje = err instanceof Error ? err.message : String(err);
-    if (/BlobNotFoundError|not_found/i.test(mensaje)) return null;
-    logError(`lib/blob.leerImagenPublica(${pathname})`, err, pistaBlob(mensaje));
+    // Un lote que falla a mitad dejaba una carga "pendiente" con el árbol
+    // incompleto, que después se podía confirmar y publicar. Se descarta.
+    await supabase.from("cargas").delete().eq("id", nueva.id);
     throw err;
   }
 }
 
-export async function leerColecciones(): Promise<Coleccion[]> {
-  return (await leerJson<Coleccion[]>(COLECCIONES_KEY)) ?? [];
+export async function leerCatalogoPendiente(): Promise<Catalogo | null> {
+  const supabase = await crearClienteServidor();
+  const { data: pendiente } = await supabase.from("cargas").select("id").eq("estado", "pendiente").maybeSingle();
+  if (!pendiente) return null;
+  return construirCatalogoDesdeCarga(supabase, pendiente.id as string);
 }
 
-export async function guardarColecciones(colecciones: Coleccion[]): Promise<void> {
-  await escribirJson(COLECCIONES_KEY, colecciones);
+/** Resumen (errores incluidos) de la carga pendiente — se guarda sobre la misma fila de `cargas`. */
+export async function guardarResumenPendiente(resumen: ResumenImportacion): Promise<void> {
+  const supabase = await crearClienteServidor();
+  const totalSinFoto = resumen.errores.filter((e) => /sin foto/i.test(e.motivo)).length;
+  const { error } = await supabase
+    .from("cargas")
+    .update({ total_errores: resumen.errores.length, total_sin_foto: totalSinFoto, errores: resumen.errores })
+    .eq("estado", "pendiente");
+  if (error) throw error;
 }
 
-/** Mismo patrón que subirImagenGuiaTallas: se sube privada y se sirve vía /api/imagenes — ver la nota ahí arriba. */
-export async function subirImagenColeccion(nombre: string, bytes: ArrayBuffer, contentType: string): Promise<string> {
-  const resultado = await put(`colecciones/${nombre}`, bytes, {
-    access: "private",
-    addRandomSuffix: true,
-    contentType,
+/**
+ * Reconstruye un ResumenImportacion desde la carga pendiente. `cargas` no
+ * guarda totalFilasOrigen/columnasFaltantes/mensaje (no hay columna para
+ * eso) — se aproxima con lo que sí está.
+ */
+export async function leerResumenPendiente(): Promise<ResumenImportacion | null> {
+  const supabase = await crearClienteServidor();
+  const { data: pendiente } = await supabase
+    .from("cargas")
+    .select("total_productos, total_variantes, errores")
+    .eq("estado", "pendiente")
+    .maybeSingle();
+  if (!pendiente) return null;
+  return {
+    ok: true,
+    totalFilasOrigen: pendiente.total_variantes as number,
+    totalProductos: pendiente.total_productos as number,
+    totalVariantes: pendiente.total_variantes as number,
+    errores: (pendiente.errores as ResumenImportacion["errores"]) ?? [],
+  };
+}
+
+/**
+ * Promueve el catálogo pendiente a catálogo publicado: switch atómico del
+ * puntero `catalogo_activo.carga_id` — a diferencia del backup+overwrite de
+ * antes, acá no se copia nada: la carga pendiente YA tiene su árbol completo
+ * propio, solo cambia de estado y pasa a ser la que apunta catalogo_activo.
+ * La carga que era publicada pasa a "descartada" (queda como respaldo/
+ * historial, no se borra).
+ */
+export async function confirmarReemplazoCatalogo(): Promise<Catalogo> {
+  const supabase = await crearClienteServidor();
+
+  const { data: pendiente } = await supabase.from("cargas").select("id").eq("estado", "pendiente").maybeSingle();
+  if (!pendiente) {
+    throw new Error("No hay un catálogo pendiente por confirmar. Vuelve a cargar el archivo.");
+  }
+
+  const { data: activo } = await supabase.from("catalogo_activo").select("carga_id").eq("id", true).maybeSingle();
+  const cargaAnteriorId = (activo?.carga_id as string | null) ?? null;
+
+  const { error: errorPuntero } = await supabase.from("catalogo_activo").update({ carga_id: pendiente.id }).eq("id", true);
+  if (errorPuntero) throw errorPuntero;
+
+  const { error: errorEstado } = await supabase.from("cargas").update({ estado: "publicada" }).eq("id", pendiente.id);
+  if (errorEstado) throw errorEstado;
+  if (cargaAnteriorId && cargaAnteriorId !== pendiente.id) {
+    const { error: errorAnterior } = await supabase.from("cargas").update({ estado: "descartada" }).eq("id", cargaAnteriorId);
+    if (errorAnterior) throw errorAnterior;
+  }
+
+  const catalogo = await construirCatalogoDesdeCarga(supabase, pendiente.id as string);
+  if (!catalogo) throw new Error("La carga se confirmó pero no se pudo releer el catálogo recién publicado.");
+  return catalogo;
+}
+
+export async function leerCatalogoBackup(): Promise<Catalogo | null> {
+  const supabase = await crearClienteServidor();
+  const { data: backup } = await supabase
+    .from("cargas")
+    .select("id")
+    .eq("estado", "descartada")
+    // Los marcadores de historial ("revertir") no tienen árbol propio. Antes
+    // se filtraban por total_productos = 0, pero el marcador COPIA
+    // total_productos del respaldo, así que nunca quedaba afuera: el segundo
+    // "Revertir" publicaba una carga vacía.
+    .neq("origen", "revertir")
+    .order("creado_en", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!backup) return null;
+  return construirCatalogoDesdeCarga(supabase, backup.id as string);
+}
+
+/** Revierte al respaldo (la carga "descartada" más reciente con árbol propio), si existe. */
+export async function revertirABackup(): Promise<Catalogo> {
+  const supabase = await crearClienteServidor();
+
+  const { data: activo } = await supabase.from("catalogo_activo").select("carga_id").eq("id", true).maybeSingle();
+  const { data: backup } = await supabase
+    .from("cargas")
+    .select("id, total_productos, total_variantes")
+    .eq("estado", "descartada")
+    .neq("origen", "revertir") // ver la nota en leerCatalogoBackup
+    .order("creado_en", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!backup) {
+    throw new Error("No hay respaldo disponible para revertir.");
+  }
+
+  // Antes ninguno de estos errores se revisaba: si el UPDATE del puntero
+  // fallaba, la API igual respondía "revertido" sin haber cambiado nada.
+  const { error: errorPuntero } = await supabase.from("catalogo_activo").update({ carga_id: backup.id }).eq("id", true);
+  if (errorPuntero) throw errorPuntero;
+  const { error: errorEstado } = await supabase.from("cargas").update({ estado: "publicada" }).eq("id", backup.id);
+  if (errorEstado) throw errorEstado;
+  if (activo?.carga_id) {
+    const { error: errorAnterior } = await supabase.from("cargas").update({ estado: "descartada" }).eq("id", activo.carga_id);
+    if (errorAnterior) throw errorAnterior;
+  }
+
+  // Registro del evento en sí (mismo criterio que antes: un revert también
+  // es un cambio real al catálogo publicado, queda en el historial). Fila
+  // "liviana": sin árbol de productos propio — solo un marcador con fecha de
+  // HOY, para que el historial muestre "revertido" en el momento real en que
+  // pasó (la fila de `backup` conserva su fecha de publicación original).
+  await supabase.from("cargas").insert({
+    estado: "descartada",
+    origen: "revertir",
+    total_productos: backup.total_productos,
+    total_variantes: backup.total_variantes,
   });
-  return `/api/imagenes/${resultado.pathname}`;
+
+  const catalogo = await construirCatalogoDesdeCarga(supabase, backup.id as string);
+  if (!catalogo) throw new Error("Se revirtió pero no se pudo releer el catálogo restaurado.");
+  return catalogo;
 }
 
-// --- Historial de cargas -----------------------------------------------
-// Un archivo JSON por carga confirmada, bajo el prefijo "historial/" — no
-// una sola lista que se reescribe entera en cada carga (eso arriesgaría
-// perder historial viejo si dos cargas se confirman casi al mismo tiempo).
-// El nombre de archivo es el id (timestamp en ms): al ser todos del mismo
-// largo mientras dure este milenio, ordenar por nombre = ordenar por fecha.
-const HISTORIAL_PREFIJO = "historial/";
-const HISTORIAL_LIMITE_LISTADO = 50; // más que suficiente para lo que el panel muestra; evita listar sin límite si el historial crece mucho
-
-async function agregarEntradaHistorial(entrada: EntradaHistorial): Promise<void> {
+/** Guarda el archivo crudo (.csv/.xlsx) de la carga pendiente en el bucket privado. No crítico: si falla, el catálogo en sí ya se guardó bien. */
+export async function guardarArchivoOriginalPendiente(bytes: ArrayBuffer, meta: MetaArchivoOriginal): Promise<void> {
   try {
-    await escribirJson(`${HISTORIAL_PREFIJO}${entrada.id}.json`, entrada);
+    const supabase = await crearClienteServidor();
+    const { data: pendiente } = await supabase.from("cargas").select("id").eq("estado", "pendiente").maybeSingle();
+    if (!pendiente) return;
+
+    const path = `original/${pendiente.id}`;
+    const { error: errorSubida } = await supabase.storage.from(BUCKET_PRIVADO).upload(path, bytes, {
+      contentType: meta.contentType,
+      upsert: true,
+    });
+    if (errorSubida) throw errorSubida;
+
+    const { error } = await supabase
+      .from("cargas")
+      .update({ origen: "archivo", nombre_archivo: meta.nombreArchivo, archivo_original_path: path, archivo_original_content_type: meta.contentType })
+      .eq("id", pendiente.id);
+    if (error) throw error;
   } catch (err) {
-    // No debe tumbar la confirmación/reversión si esto falla — el catálogo
-    // en sí ya quedó publicado; solo se pierde ese registro del historial.
-    const mensaje = err instanceof Error ? err.message : String(err);
-    logError("lib/blob.agregarEntradaHistorial", err, pistaBlob(mensaje));
+    logError("lib/blob.guardarArchivoOriginalPendiente", err);
   }
 }
 
-/** Las cargas confirmadas más recientes primero (más nuevo primero). */
+/** Origen "Google Sheets": no hay archivo que guardar — la carga pendiente queda marcada así. */
+export async function limpiarArchivoOriginalPendiente(): Promise<void> {
+  const supabase = await crearClienteServidor();
+  const { data: pendiente } = await supabase
+    .from("cargas")
+    .select("id, archivo_original_path")
+    .eq("estado", "pendiente")
+    .maybeSingle();
+  if (!pendiente) return;
+
+  if (pendiente.archivo_original_path) {
+    await supabase.storage.from(BUCKET_PRIVADO).remove([pendiente.archivo_original_path as string]).catch(() => {});
+  }
+  await supabase
+    .from("cargas")
+    .update({ origen: "google_sheets", nombre_archivo: null, archivo_original_path: null, archivo_original_content_type: null })
+    .eq("id", pendiente.id);
+}
+
+/** El archivo (.csv/.xlsx) que generó el catálogo actualmente publicado, si lo hay. */
+export async function leerArchivoOriginal(): Promise<ArchivoOriginal | null> {
+  const supabase = await crearClienteServidor();
+  const { data: activo } = await supabase.from("catalogo_activo").select("carga_id").eq("id", true).maybeSingle();
+  if (!activo?.carga_id) return null;
+
+  const { data: carga } = await supabase
+    .from("cargas")
+    .select("nombre_archivo, archivo_original_path, archivo_original_content_type")
+    .eq("id", activo.carga_id)
+    .maybeSingle();
+  if (!carga?.archivo_original_path) return null;
+
+  const { data: archivo, error } = await supabase.storage.from(BUCKET_PRIVADO).download(carga.archivo_original_path as string);
+  if (error || !archivo) return null;
+
+  return {
+    bytes: await archivo.arrayBuffer(),
+    meta: {
+      nombreArchivo: (carga.nombre_archivo as string | null) ?? "catalogo",
+      contentType: (carga.archivo_original_content_type as string | null) ?? archivo.type ?? "application/octet-stream",
+    },
+  };
+}
+
+/** Las cargas confirmadas (publicadas o reemplazadas) más recientes primero — un registro por cada carga CONFIRMADA, no cada análisis. */
 export async function leerHistorial(limite = 20): Promise<EntradaHistorial[]> {
-  try {
-    const { blobs } = await list({ prefix: HISTORIAL_PREFIJO, limit: HISTORIAL_LIMITE_LISTADO });
-    const ordenados = [...blobs].sort((a, b) => (a.pathname < b.pathname ? 1 : -1));
-    const entradas = await Promise.all(
-      ordenados.slice(0, limite).map((b) => leerJson<EntradaHistorial>(b.pathname)),
-    );
-    return entradas.filter((e): e is EntradaHistorial => e !== null);
-  } catch (err) {
-    const mensaje = err instanceof Error ? err.message : String(err);
-    logError("lib/blob.leerHistorial", err, pistaBlob(mensaje));
+  const supabase = await crearClienteServidor();
+  const { data, error } = await supabase
+    .from("cargas")
+    .select("id, creado_en, origen, nombre_archivo, total_productos, total_variantes, total_errores, total_sin_foto")
+    .neq("estado", "pendiente")
+    .order("creado_en", { ascending: false })
+    .limit(limite);
+  if (error) {
+    logError("lib/blob.leerHistorial", error);
     return [];
   }
+  return (data ?? []).map((h) => ({
+    id: h.id as string,
+    fecha: h.creado_en as string,
+    origen: h.origen as EntradaHistorial["origen"],
+    nombreArchivo: h.nombre_archivo as string | null,
+    totalProductos: h.total_productos as number,
+    totalVariantes: h.total_variantes as number,
+    totalErrores: h.total_errores as number,
+    totalSinFoto: h.total_sin_foto as number,
+  }));
+}
+
+// =============================================================================
+// Guía de tallas, colecciones, config-sitio — en Postgres (tablas singleton
+// guia_tallas/config_sitio, tabla colecciones). Imágenes — en el bucket
+// PÚBLICO de Supabase Storage ("publico"), URL directa sin proxy.
+// =============================================================================
+
+const BUCKET_PUBLICO = "publico";
+
+/**
+ * Sube una imagen que el navegador del comprador necesita poder ver directo
+ * (portada de colección, guía de tallas, fondo de login) al bucket público
+ * de Storage — a diferencia del bucket "privado" (archivo original del
+ * catálogo), este SÍ es público desde su creación, así que la URL que
+ * devuelve `getPublicUrl` ya sirve tal cual, sin pasar por ningún proxy.
+ * `prefijo` reusa el mismo esquema de carpetas que tenía Blob
+ * ("colecciones/", "guia-tallas/", "login/") y el nombre lleva un uuid
+ * como prefijo para no pisar un archivo existente (equivalente al
+ * addRandomSuffix de Blob).
+ */
+async function subirImagenPublica(prefijo: string, nombre: string, bytes: ArrayBuffer, contentType: string): Promise<string> {
+  const supabase = await crearClienteServidor();
+  const path = `${prefijo}/${randomUUID()}-${nombre}`;
+  const { error } = await supabase.storage.from(BUCKET_PUBLICO).upload(path, bytes, { contentType, upsert: false });
+  if (error) throw error;
+  const { data } = supabase.storage.from(BUCKET_PUBLICO).getPublicUrl(path);
+  return data.publicUrl;
+}
+
+export async function subirImagenGuiaTallas(nombre: string, bytes: ArrayBuffer, contentType: string): Promise<string> {
+  return subirImagenPublica("guia-tallas", nombre, bytes, contentType);
+}
+
+export async function subirImagenColeccion(nombre: string, bytes: ArrayBuffer, contentType: string): Promise<string> {
+  return subirImagenPublica("colecciones", nombre, bytes, contentType);
+}
+
+export async function subirImagenFondoLogin(nombre: string, bytes: ArrayBuffer, contentType: string): Promise<string> {
+  return subirImagenPublica("login", nombre, bytes, contentType);
+}
+
+export async function subirImagenLogoMarca(nombre: string, bytes: ArrayBuffer, contentType: string): Promise<string> {
+  return subirImagenPublica("logo-marca", nombre, bytes, contentType);
+}
+
+export async function subirImagenLogoFooter(nombre: string, bytes: ArrayBuffer, contentType: string): Promise<string> {
+  return subirImagenPublica("logos-footer", nombre, bytes, contentType);
+}
+
+/**
+ * Borra del bucket público el objeto detrás de una URL pública ya subida acá
+ * (subirImagenPublica) — para no dejar huérfano el archivo VIEJO cuando se
+ * reemplaza o se quita una imagen (logo, fondo de login, portada de
+ * colección, etc.) en cualquiera de los paneles de configuración. Best
+ * effort a propósito: si la URL no es de nuestro bucket (el admin pegó un
+ * link externo a mano) o el borrado falla, no lanza — un blob huérfano es un
+ * problema de limpieza de Storage, nunca motivo para hacer fallar un
+ * guardado que del lado de la base de datos ya se completó.
+ */
+export async function eliminarImagenPublica(url: string | null | undefined): Promise<void> {
+  if (!url) return;
+  const marcador = `/storage/v1/object/public/${BUCKET_PUBLICO}/`;
+  const indice = url.indexOf(marcador);
+  if (indice === -1) return;
+  const path = url.slice(indice + marcador.length).split("?")[0];
+  if (!path) return;
+  try {
+    const supabase = await crearClienteServidor();
+    const { error } = await supabase.storage.from(BUCKET_PUBLICO).remove([path]);
+    if (error) logError("lib/blob.eliminarImagenPublica", error);
+  } catch (err) {
+    logError("lib/blob.eliminarImagenPublica", err);
+  }
+}
+
+/** Config actual de la guía de tallas (instrucciones + tabla). Nunca falta: si no se configuró aún, ambos campos vienen en null. */
+export const leerGuiaTallas = cache(async (): Promise<GuiaTallas> => {
+  const supabase = await crearClienteServidor();
+  const { data, error } = await supabase.from("guia_tallas").select("instrucciones_url, tabla_url").eq("id", true).maybeSingle();
+  if (error) {
+    logError("lib/blob.leerGuiaTallas", error);
+    return { instrucciones: null, tabla: null };
+  }
+  return { instrucciones: (data?.instrucciones_url as string | null) ?? null, tabla: (data?.tabla_url as string | null) ?? null };
+});
+
+export async function guardarGuiaTallas(guia: GuiaTallas): Promise<void> {
+  const supabase = await crearClienteServidor();
+  const { error } = await supabase
+    .from("guia_tallas")
+    .upsert({ id: true, instrucciones_url: guia.instrucciones, tabla_url: guia.tabla, actualizado_en: new Date().toISOString() }, { onConflict: "id" });
+  if (error) throw error;
+}
+
+// cache() — ver la nota sobre leerCatalogoPublico más arriba: mismo motivo.
+export const leerColecciones = cache(async (): Promise<Coleccion[]> => {
+  const supabase = await crearClienteServidor();
+  const { data, error } = await supabase.from("colecciones").select("id, nombre, imagen_url, filtro").order("orden", { ascending: true });
+  if (error) {
+    logError("lib/blob.leerColecciones", error);
+    return [];
+  }
+  return (data ?? []).map((c) => ({
+    id: c.id as string,
+    nombre: c.nombre as string,
+    imagenUrl: c.imagen_url as string | null,
+    filtro: (c.filtro as Coleccion["filtro"]) ?? {},
+  }));
+});
+
+/** Reemplaza la lista entera (mismo contrato que antes: el panel manda alta/edición/borrado/reorden ya aplicados sobre la lista completa). */
+export async function guardarColecciones(colecciones: Coleccion[]): Promise<void> {
+  const supabase = await crearClienteServidor();
+  const { error: errorBorrado } = await supabase.from("colecciones").delete().not("id", "is", null);
+  if (errorBorrado) throw errorBorrado;
+  if (colecciones.length === 0) return;
+
+  const filas = colecciones.map((c, i) => ({ id: c.id, nombre: c.nombre, imagen_url: c.imagenUrl, filtro: c.filtro, orden: i }));
+  const { error: errorInsercion } = await supabase.from("colecciones").insert(filas);
+  if (errorInsercion) throw errorInsercion;
+}
+
+// --- Logos de marca del footer ("Nuestras marcas") -----------------------
+// Mismo patrón que colecciones: el panel maneja alta/edición/borrado/orden
+// como una lista completa en memoria y la guarda de una vez (reemplazo total
+// — borra todo e inserta de nuevo, ver guardarColecciones).
+export const leerLogosFooter = cache(async (): Promise<LogoFooter[]> => {
+  const supabase = await crearClienteServidor();
+  const { data, error } = await supabase.from("logos_footer").select("id, nombre, imagen_url, visible").order("orden", { ascending: true });
+  if (error) {
+    logError("lib/blob.leerLogosFooter", error);
+    return [];
+  }
+  return (data ?? []).map((l) => ({
+    id: l.id as string,
+    nombre: l.nombre as string,
+    imagenUrl: l.imagen_url as string | null,
+    visible: l.visible as boolean,
+  }));
+});
+
+export async function guardarLogosFooter(logos: LogoFooter[]): Promise<void> {
+  const supabase = await crearClienteServidor();
+  const { error: errorBorrado } = await supabase.from("logos_footer").delete().not("id", "is", null);
+  if (errorBorrado) throw errorBorrado;
+  if (logos.length === 0) return;
+
+  const filas = logos.map((l, i) => ({ id: l.id, nombre: l.nombre, imagen_url: l.imagenUrl, visible: l.visible, orden: i }));
+  const { error: errorInsercion } = await supabase.from("logos_footer").insert(filas);
+  if (errorInsercion) throw errorInsercion;
 }
 
 // --- Configuración del sitio ---------------------------------------------
@@ -394,15 +672,63 @@ export async function leerHistorial(limite = 20): Promise<EntradaHistorial[]> {
 // ventas, datos de contacto del footer) que antes solo se podían cambiar
 // desde Vercel (variable de entorno) o estaban fijos en el código. Todos
 // los campos son opcionales — si no están configurados acá, cada lugar que
-// los usa cae a su valor por defecto (ver CONFIG_VACIA).
-const CONFIG_SITIO_KEY = "config-sitio.json";
+// los usa cae a su valor por defecto (ver CONFIG_SITIO_VACIA).
+export const CONFIG_SITIO_VACIA: ConfigSitio = {
+  whatsappVentas: null,
+  descripcionEmpresa: null,
+  rif: null,
+  fondoLoginUrl: null,
+  logoUrl: null,
+  logoVisible: true,
+  razonSocial: "Calzados Mesvol, C.A.",
+  tituloPlataforma: null,
+};
 
-export const CONFIG_SITIO_VACIA: ConfigSitio = { whatsappVentas: null, descripcionEmpresa: null, rif: null };
-
-export async function leerConfigSitio(): Promise<ConfigSitio> {
-  return (await leerJson<ConfigSitio>(CONFIG_SITIO_KEY)) ?? CONFIG_SITIO_VACIA;
-}
+// cache() — layout.tsx, page.tsx y producto/[id]/page.tsx llaman esto cada
+// uno por su cuenta dentro de la misma request (config del footer). Sin
+// esto eran hasta 3 lecturas idénticas por visita.
+export const leerConfigSitio = cache(async (): Promise<ConfigSitio> => {
+  const supabase = await crearClienteServidor();
+  const { data, error } = await supabase
+    .from("config_sitio")
+    .select("whatsapp_ventas, descripcion_empresa, rif, fondo_login_url, logo_url, logo_visible, razon_social, titulo_plataforma")
+    .eq("id", true)
+    .maybeSingle();
+  if (error) {
+    logError("lib/blob.leerConfigSitio", error);
+    return CONFIG_SITIO_VACIA;
+  }
+  if (!data) return CONFIG_SITIO_VACIA;
+  return {
+    whatsappVentas: data.whatsapp_ventas as string | null,
+    descripcionEmpresa: data.descripcion_empresa as string | null,
+    rif: data.rif as string | null,
+    fondoLoginUrl: data.fondo_login_url as string | null,
+    logoUrl: data.logo_url as string | null,
+    logoVisible: data.logo_visible as boolean,
+    razonSocial: (data.razon_social as string) || CONFIG_SITIO_VACIA.razonSocial,
+    tituloPlataforma: data.titulo_plataforma as string | null,
+  };
+});
 
 export async function guardarConfigSitio(config: ConfigSitio): Promise<void> {
-  await escribirJson(CONFIG_SITIO_KEY, config);
+  const supabase = await crearClienteServidor();
+  const { error } = await supabase
+    .from("config_sitio")
+    .upsert(
+      {
+        id: true,
+        whatsapp_ventas: config.whatsappVentas,
+        descripcion_empresa: config.descripcionEmpresa,
+        rif: config.rif,
+        fondo_login_url: config.fondoLoginUrl,
+        logo_url: config.logoUrl,
+        logo_visible: config.logoVisible,
+        razon_social: config.razonSocial,
+        titulo_plataforma: config.tituloPlataforma,
+        actualizado_en: new Date().toISOString(),
+      },
+      { onConflict: "id" },
+    );
+  if (error) throw error;
 }

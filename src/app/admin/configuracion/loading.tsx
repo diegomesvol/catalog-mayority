@@ -6,8 +6,7 @@ import { AdminHeader } from "@/components/admin/AdminHeader";
 // misma forma, para que no haya parpadeo entre "nada" y el skeleton interno.
 export default function CargandoConfiguracion() {
   return (
-    <>
-      <AdminHeader />
+    <AdminHeader>
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:px-6 sm:py-8" aria-label="Cargando" role="status">
         <div className="rounded-2xl border border-ink-200 p-4 sm:p-5">
           <div className="skeleton h-4 w-32 rounded" />
@@ -30,6 +29,6 @@ export default function CargandoConfiguracion() {
           <div className="skeleton mt-4 h-9 w-40 rounded-full" />
         </div>
       </main>
-    </>
+    </AdminHeader>
   );
 }

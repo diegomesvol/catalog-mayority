@@ -1,12 +1,14 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { leerCatalogoPublico, leerConfigSitio, leerGuiaTallas } from "@/lib/blob";
+import { leerCatalogoPublico, leerConfigSitio, leerGuiaTallas, leerLogosFooter } from "@/lib/blob";
 import { Header } from "@/components/ui/Header";
 import { Footer } from "@/components/ui/Footer";
 import { DetalleProducto } from "@/components/detalle/DetalleProducto";
 import { buscarColor, colorPorDefecto } from "@/lib/producto";
 import { formatearPrecio } from "@/lib/format";
 import { esCalzado } from "@/lib/transform";
+import { ClienteHeader } from "@/components/cliente/ClienteHeader";
+import { obtenerClienteActivoCacheado } from "@/lib/sesionCliente";
 
 export const dynamic = "force-dynamic";
 
@@ -68,23 +70,41 @@ export default async function PaginaProducto({ params, searchParams }: Props) {
 
   // Solo se usa si viene del catálogo (empieza con "/"); cualquier otro
   // valor (link editado a mano, por ejemplo) cae al catálogo sin filtrar.
-  const hrefVolver = volver && volver.startsWith("/") ? volver : "/";
+  // "//dominio" y "/\dominio" también empiezan con "/" pero el navegador los
+  // resuelve como otro sitio (open redirect) — se descartan.
+  const hrefVolver = volver && volver.startsWith("/") && !volver.startsWith("//") && !volver.includes("\\") ? volver : "/";
 
   // La guía de tallas es una config fija de todo el calzado del catálogo
   // (no un dato por producto) — se administra aparte, desde el panel admin.
   // Ver GuiaTallasConfig.tsx.
-  const [guiaTallas, config] = await Promise.all([
+  const [guiaTallas, config, logosFooter, clienteActivo] = await Promise.all([
     esCalzado(producto.rubro) ? leerGuiaTallas() : Promise.resolve({ instrucciones: null, tabla: null }),
     leerConfigSitio(),
+    leerLogosFooter(),
+    // Mismo criterio que app/page.tsx: cacheada por request, no duplica la
+    // consulta que Header.tsx ya hace internamente. Solo decide si se
+    // envuelve la página con el sidebar del portal de cliente.
+    obtenerClienteActivoCacheado(),
   ]);
 
-  return (
+  const contenido = (
     <>
       <Header />
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
         <DetalleProducto producto={producto} colorInicial={color} hrefVolver={hrefVolver} guiaTallas={guiaTallas} />
       </main>
-      <Footer config={config} />
+      <Footer config={config} logosFooter={logosFooter} />
     </>
+  );
+
+  // Mismo criterio que app/page.tsx — ver la nota grande ahí.
+  if (!clienteActivo) return contenido;
+  return (
+    <ClienteHeader
+      perfilCompleto={clienteActivo.perfilCompleto}
+      cliente={{ nombre: clienteActivo.nombre, email: clienteActivo.email, avatarUrl: clienteActivo.avatarUrl }}
+    >
+      {contenido}
+    </ClienteHeader>
   );
 }

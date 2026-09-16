@@ -1,9 +1,8 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId } from "react";
 import { toast } from "sonner";
-import { logError } from "@/lib/logger";
-import { prepararImagenParaSubir } from "@/lib/imagenCliente";
+import { useColeccionesAdmin } from "@/hooks/useColeccionesAdmin";
 import { ImagenProducto } from "@/components/catalogo/ImagenProducto";
 import type { Coleccion, FiltroColeccion } from "@/lib/types";
 
@@ -22,10 +21,6 @@ const CAMPO_FILTRO: { campo: keyof FiltroColeccion; etiqueta: string; todas: str
   { campo: "genero", etiqueta: "Género", todas: "Cualquier género" },
   { campo: "color", etiqueta: "Color", todas: "Cualquier color" },
 ];
-
-function coleccionVacia(): Coleccion {
-  return { id: crypto.randomUUID(), nombre: "", imagenUrl: null, filtro: {} };
-}
 
 /** Chips de resumen para la vista de solo lectura — "Marca: VOLPE", etc., o "Todo el catálogo" si no filtra nada. */
 function resumenFiltro(filtro: FiltroColeccion): string[] {
@@ -56,152 +51,26 @@ function confirmarEliminar(nombre: string, alConfirmar: () => void) {
 // Agregar colección", o una que el admin tocó explícitamente con "Editar",
 // se muestra como formulario (TarjetaColeccionEditor). "guardadas" guarda
 // la última versión confirmada por el servidor — es lo que "Cancelar"
-// restaura al cerrar una edición sin guardar.
+// restaura al cerrar una edición sin guardar. Todo ese estado y las
+// operaciones viven en useColeccionesAdmin — acá solo se renderiza.
 export function ColeccionesConfig({ opciones, coleccionesIniciales }: { opciones: Opciones; coleccionesIniciales: Coleccion[] }) {
-  const [colecciones, setColecciones] = useState<Coleccion[]>(coleccionesIniciales);
-  const [guardadas, setGuardadas] = useState<Coleccion[]>(coleccionesIniciales);
-  const [idsEnEdicion, setIdsEnEdicion] = useState<Set<string>>(new Set());
-  const [subiendoId, setSubiendoId] = useState<string | null>(null);
-  const [guardando, setGuardando] = useState(false);
-  const [errores, setErrores] = useState<Record<string, string>>({});
-
-  function actualizar(id: string, cambios: Partial<Coleccion>) {
-    setColecciones((prev) => prev.map((c) => (c.id === id ? { ...c, ...cambios } : c)));
-  }
-
-  function actualizarFiltro(id: string, campo: keyof FiltroColeccion, valor: string) {
-    setColecciones((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, filtro: { ...c.filtro, [campo]: valor || undefined } } : c)),
-    );
-  }
-
-  function mover(id: string, direccion: -1 | 1) {
-    setColecciones((prev) => {
-      const i = prev.findIndex((c) => c.id === id);
-      const j = i + direccion;
-      if (i < 0 || j < 0 || j >= prev.length) return prev;
-      const copia = [...prev];
-      [copia[i], copia[j]] = [copia[j], copia[i]];
-      return copia;
-    });
-  }
-
-  function limpiarError(id: string) {
-    setErrores((prev) => {
-      if (!(id in prev)) return prev;
-      const resto = { ...prev };
-      delete resto[id];
-      return resto;
-    });
-  }
-
-  function eliminar(id: string) {
-    setColecciones((prev) => prev.filter((c) => c.id !== id));
-    setIdsEnEdicion((prev) => {
-      if (!prev.has(id)) return prev;
-      const copia = new Set(prev);
-      copia.delete(id);
-      return copia;
-    });
-    limpiarError(id);
-  }
-
-  function editar(id: string) {
-    setIdsEnEdicion((prev) => new Set(prev).add(id));
-  }
-
-  /** Cierra el formulario sin guardar: si la colección ya existía, vuelve a sus valores guardados; si es nueva (recién agregada, nunca guardada), se descarta directamente. */
-  function cancelar(id: string) {
-    const original = guardadas.find((g) => g.id === id);
-    if (original) {
-      setColecciones((prev) => prev.map((c) => (c.id === id ? original : c)));
-      setIdsEnEdicion((prev) => {
-        const copia = new Set(prev);
-        copia.delete(id);
-        return copia;
-      });
-      limpiarError(id);
-    } else {
-      eliminar(id);
-    }
-  }
-
-  async function subirImagen(id: string, archivoOriginal: File) {
-    setSubiendoId(id);
-    try {
-      const archivo = await prepararImagenParaSubir(archivoOriginal);
-      const formData = new FormData();
-      formData.set("archivo", archivo);
-      const resp = await fetch("/api/admin/colecciones/imagen", { method: "POST", body: formData });
-
-      if (!resp.ok) {
-        // Un 413 (o cualquier otro corte antes de llegar a nuestro route
-        // handler) no siempre trae JSON — leerlo como texto primero evita
-        // el "Unexpected token" al intentar parsear HTML/texto plano.
-        const texto = await resp.text();
-        let mensaje =
-          resp.status === 413 ? "La imagen sigue pesando demasiado — probá con otra o recortala." : "No se pudo subir la imagen.";
-        try {
-          const data = JSON.parse(texto) as { mensaje?: string };
-          if (data.mensaje) mensaje = data.mensaje;
-        } catch {
-          // No era JSON — se queda con el mensaje genérico de arriba.
-        }
-        toast.error(mensaje);
-        return;
-      }
-
-      const data = (await resp.json()) as { ok: boolean; url?: string; mensaje?: string };
-      if (!data.ok || !data.url) {
-        toast.error(data.mensaje ?? "No se pudo subir la imagen.");
-        return;
-      }
-      actualizar(id, { imagenUrl: data.url });
-    } catch (err) {
-      logError("ColeccionesConfig.subirImagen", err, "No se pudo conectar con el servidor — revisá tu conexión a internet y probá de nuevo.");
-      toast.error("No se pudo conectar con el servidor.");
-    } finally {
-      setSubiendoId(null);
-    }
-  }
-
-  async function guardar() {
-    const nuevosErrores: Record<string, string> = {};
-    for (const c of colecciones) {
-      if (!c.nombre.trim()) nuevosErrores[c.id] = "Falta el nombre.";
-    }
-    setErrores(nuevosErrores);
-    if (Object.keys(nuevosErrores).length > 0) {
-      toast.error("Revisá las colecciones sin nombre antes de guardar.");
-      return;
-    }
-
-    setGuardando(true);
-    try {
-      const resp = await fetch("/api/admin/colecciones", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(colecciones),
-      });
-      const data = (await resp.json()) as { ok: boolean; colecciones?: Coleccion[]; mensaje?: string };
-      if (!resp.ok || !data.ok || !data.colecciones) {
-        toast.error(data.mensaje ?? "No se pudieron guardar las colecciones.");
-        return;
-      }
-      // Guardado exitoso = ya no queda ningún formulario abierto: TODO lo
-      // que se ve ahora es, por definición, lo que hay guardado en el
-      // servidor — ver la nota grande de arriba.
-      setColecciones(data.colecciones);
-      setGuardadas(data.colecciones);
-      setIdsEnEdicion(new Set());
-      toast.success("Colecciones actualizadas.");
-    } catch (err) {
-      logError("ColeccionesConfig.guardar", err, "No se pudo conectar con el servidor — revisá tu conexión a internet y probá de nuevo.");
-      toast.error("No se pudo conectar con el servidor.");
-    } finally {
-      setGuardando(false);
-    }
-  }
+  const {
+    colecciones,
+    guardadas,
+    idsEnEdicion,
+    subiendoId,
+    guardando,
+    errores,
+    actualizar,
+    actualizarFiltro,
+    mover,
+    eliminar,
+    editar,
+    agregar,
+    cancelar,
+    subirImagen,
+    guardar,
+  } = useColeccionesAdmin(coleccionesIniciales);
 
   return (
     <div className="rounded-2xl border border-ink-200 p-4">
@@ -258,11 +127,7 @@ export function ColeccionesConfig({ opciones, coleccionesIniciales }: { opciones
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button
           type="button"
-          onClick={() => {
-            const nueva = coleccionVacia();
-            setColecciones((prev) => [...prev, nueva]);
-            editar(nueva.id);
-          }}
+          onClick={agregar}
           className="rounded-full border border-ink-200 px-4 py-2 text-sm font-medium text-ink-900 transition-colors hover:border-ink-900"
         >
           + Agregar colección
@@ -322,7 +187,7 @@ function TarjetaColeccionVista({
             onClick={onMoverArriba}
             disabled={esPrimera}
             aria-label="Mover arriba"
-            className="rounded-lg border border-ink-200 px-2 py-1 text-xs text-ink-700 disabled:cursor-not-allowed disabled:opacity-30"
+            className="rounded-lg border border-ink-200 px-2 py-1 text-xs text-ink-700 transition-colors hover:border-ink-900 hover:bg-ink-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-ink-200 disabled:hover:bg-transparent"
           >
             ↑
           </button>
@@ -331,7 +196,7 @@ function TarjetaColeccionVista({
             onClick={onMoverAbajo}
             disabled={esUltima}
             aria-label="Mover abajo"
-            className="rounded-lg border border-ink-200 px-2 py-1 text-xs text-ink-700 disabled:cursor-not-allowed disabled:opacity-30"
+            className="rounded-lg border border-ink-200 px-2 py-1 text-xs text-ink-700 transition-colors hover:border-ink-900 hover:bg-ink-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-ink-200 disabled:hover:bg-transparent"
           >
             ↓
           </button>
@@ -437,7 +302,7 @@ function TarjetaColeccionEditor({
             onClick={onMoverArriba}
             disabled={esPrimera}
             aria-label="Mover arriba"
-            className="rounded-lg border border-ink-200 px-2 py-1 text-xs text-ink-700 disabled:cursor-not-allowed disabled:opacity-30"
+            className="rounded-lg border border-ink-200 px-2 py-1 text-xs text-ink-700 transition-colors hover:border-ink-900 hover:bg-ink-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-ink-200 disabled:hover:bg-transparent"
           >
             ↑
           </button>
@@ -446,7 +311,7 @@ function TarjetaColeccionEditor({
             onClick={onMoverAbajo}
             disabled={esUltima}
             aria-label="Mover abajo"
-            className="rounded-lg border border-ink-200 px-2 py-1 text-xs text-ink-700 disabled:cursor-not-allowed disabled:opacity-30"
+            className="rounded-lg border border-ink-200 px-2 py-1 text-xs text-ink-700 transition-colors hover:border-ink-900 hover:bg-ink-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-ink-200 disabled:hover:bg-transparent"
           >
             ↓
           </button>

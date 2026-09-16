@@ -26,9 +26,12 @@
 //      3) la landing ("/" sin query), si se descargó;
 //      4) offline.html, si ninguna de las anteriores está.
 //  - Fotos de producto (cdn.shopify.com), portadas servidas por
-//    /api/imagenes/*, y los logos de marca del Footer (/marcas/*.png):
-//    solo lectura de caché — si no están, se pide a la red (sin guardar la
-//    respuesta).
+//    /api/imagenes/*, los logos de marca del Footer (/marcas/*.png, los 3
+//    viejos que puedan quedar embebidos en HTML cacheado) y cualquier asset
+//    público de Supabase Storage (/storage/v1/object/public/*, cross-
+//    origin — logo principal y logos de "Nuestras marcas" subidos desde
+//    /admin/configuracion): solo lectura de caché — si no están, se pide a
+//    la red (sin guardar la respuesta).
 //  - Assets estáticos de Next (/_next/static/*, con hash — no cambian
 //    nunca): misma lógica de solo lectura.
 //  - /api/* (salvo /api/imagenes/*, ver arriba) y /admin/*: nunca se toca —
@@ -39,7 +42,17 @@
 // archivo — no hace falta tocarlo cuando solo cambia el catálogo (Vercel
 // Blob) ni cuando el vendedor vuelve a descargar (eso reescribe las mismas
 // claves de caché, sin subir de versión).
-const CACHE_VERSION = "v2";
+//
+// v3: los logos del footer (y el logo principal de login/footer) dejaron de
+// ser archivos fijos en public/marcas/* para pasar a URLs de Supabase
+// Storage subidas por el admin (cross-origin) — antes esas URLs no
+// coincidían con NINGUNA de las condiciones de abajo, así que el fetch
+// listener las dejaba pasar sin intervenir y, offline, se rompían
+// silenciosamente aunque el botón de descarga sí las hubiera guardado en
+// CACHE_IMAGENES (ver esAssetDeStoragePublico y useDescargaOfflineCatalogo,
+// que ya las descarga en modo "no-cors" y las guarda con cache.put(url,
+// respuesta) — clave: la URL completa, sirve para cross-origin igual).
+const CACHE_VERSION = "v3";
 const CACHE_PAGINAS = `catalogo-paginas-${CACHE_VERSION}`;
 const CACHE_ASSETS = `catalogo-assets-${CACHE_VERSION}`;
 const CACHE_IMAGENES = `catalogo-imagenes-${CACHE_VERSION}`;
@@ -85,6 +98,17 @@ function esFotoDeProducto(url) {
 // imposible de precachear de forma confiable.
 function esLogoDeMarca(url) {
   return url.origin === self.location.origin && url.pathname.startsWith("/marcas/");
+}
+
+// Assets públicos de Supabase Storage — logo principal (login/footer) y
+// logos de "Nuestras marcas" del footer, subidos desde /admin/configuracion
+// (ver lib/blob.ts: subirImagenLogoMarca/subirImagenLogoFooter, siempre bajo
+// el bucket "publico"). Cross-origin (otro host que el propio sitio), pero
+// la ruta pública de Supabase Storage siempre tiene esta forma fija sin
+// importar el proyecto, así que alcanza con el pathname — no hace falta
+// conocer el hostname de antemano.
+function esAssetDeStoragePublico(url) {
+  return url.pathname.includes("/storage/v1/object/public/");
 }
 
 // Puente propio hacia imágenes privadas (portadas de colección, guía de
@@ -160,7 +184,13 @@ self.addEventListener("fetch", (evento) => {
 
   if (esRutaAdmin(url)) return; // se deja pasar sin intervenir — nunca se cachea el panel admin ni sus llamadas mutantes
 
-  if (esAssetEstaticoDeNext(url) || esFotoDeProducto(url) || esImagenProxeada(url) || esLogoDeMarca(url)) {
+  if (
+    esAssetEstaticoDeNext(url) ||
+    esFotoDeProducto(url) ||
+    esImagenProxeada(url) ||
+    esLogoDeMarca(url) ||
+    esAssetDeStoragePublico(url)
+  ) {
     evento.respondWith(soloLecturaDeCache(peticion, esAssetEstaticoDeNext(url) ? CACHE_ASSETS : CACHE_IMAGENES));
     return;
   }

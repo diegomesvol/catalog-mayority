@@ -1,66 +1,97 @@
-// Autenticación mínima de un solo administrador: la contraseña vive en
-// ADMIN_PASSWORD y la sesión es una cookie httpOnly firmada con HMAC-SHA256.
-// No hay tabla de usuarios ni recuperación de contraseña.
-//
-// Se usa Web Crypto (crypto.subtle) en vez de `node:crypto` para que el mismo
-// código funcione tanto en middleware (Edge) como en route handlers (Node).
+// Autenticación de administradores vía Supabase Auth + tabla admin_perfiles
+// (rol y estado activo) — ver supabase/migrations/20260910000000_init_schema.sql.
+// Reemplaza la sesión HMAC de un solo admin: ahora cada admin tiene su
+// propia cuenta (auth.users) y una fila en admin_perfiles que decide si
+// puede entrar (activo) y con qué rol.
 
-const DURACION_SESION_MS = 12 * 60 * 60 * 1000; // 12 horas
-export const COOKIE_SESION = "admin_session";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
+import { logError } from "./logger";
 
-const encoder = new TextEncoder();
+export type RolAdmin = "superadmin" | "admin" | "editor";
 
-function bytesABase64Url(bytes: ArrayBuffer): string {
-  let binario = "";
-  new Uint8Array(bytes).forEach((b) => {
-    binario += String.fromCharCode(b);
-  });
-  return btoa(binario).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+export interface PerfilAdmin {
+  nombre: string;
+  rol: RolAdmin;
+  activo: boolean;
+  // Modo demo: independiente del rol (ver migración
+  // 20260914000000_rbac_demo_clientes_pedidos.sql) — una cuenta puede tener
+  // rol 'admin' (ve todo) pero con esto en true no puede guardar nada.
+  solo_lectura: boolean;
 }
 
-async function firmar(payload: string, secreto: string): Promise<string> {
-  const key = await crypto.subtle.importKey("raw", encoder.encode(secreto), { name: "HMAC", hash: "SHA-256" }, false, [
-    "sign",
-  ]);
-  const firma = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
-  return bytesABase64Url(firma);
+/**
+ * Perfil del admin autenticado en esta sesión, o null si no hay sesión
+ * válida, no tiene fila en admin_perfiles, o está desactivado. getUser()
+ * (no getSession()) valida el token contra el servidor de Supabase en vez
+ * de solo decodificarlo — es lo recomendado para código de servidor.
+ */
+export async function obtenerAdminActivo(supabase: SupabaseClient): Promise<PerfilAdmin | null> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: perfil, error } = await supabase
+    .from("admin_perfiles")
+    .select("nombre, rol, activo, solo_lectura")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  // Un error acá (ej. permission denied por una política/función RLS mal
+  // otorgada) no debe confundirse con "no tiene perfil": se loguea para que
+  // quede visible en los logs del servidor en vez de aparecer, sin
+  // explicación, como "tu cuenta no tiene acceso al panel".
+  if (error) logError("obtenerAdminActivo", error);
+  if (!perfil || !perfil.activo) return null;
+  return perfil as PerfilAdmin;
 }
 
-function compararConstante(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
+// Mismas reglas que las funciones puede_escribir_catalogo()/
+// puede_escribir_operativo() del lado de la base (RLS) — acá se repiten
+// porque hoy el catálogo/colecciones/config todavía viven en Vercel Blob,
+// no en Postgres, así que RLS no los protege: esta es la única barrera real
+// para esas rutas hasta que se adopte la migración a Postgres.
+export function puedeEscribirCatalogo(perfil: PerfilAdmin): boolean {
+  return !perfil.solo_lectura && (perfil.rol === "admin" || perfil.rol === "superadmin");
 }
 
-export async function crearTokenSesion(): Promise<string> {
-  const secreto = process.env.ADMIN_PASSWORD;
-  if (!secreto) throw new Error("Falta configurar ADMIN_PASSWORD");
-  const expira = Date.now() + DURACION_SESION_MS;
-  const payload = String(expira);
-  const firma = await firmar(payload, secreto);
-  return `${payload}.${firma}`;
+export function puedeEscribirOperativo(perfil: PerfilAdmin): boolean {
+  return !perfil.solo_lectura;
 }
 
-export async function tokenSesionValido(token: string | undefined | null): Promise<boolean> {
-  if (!token) return false;
-  const secreto = process.env.ADMIN_PASSWORD;
-  if (!secreto) return false;
+/**
+ * Chequeo de permiso para el POST/mutación de una ruta admin — llamar al
+ * principio del handler, antes de tocar Blob/Postgres. `tipo` distingue
+ * "catalogo" (cargar/confirmar/revertir — bloqueado para editor y demo) de
+ * "operativo" (colecciones/config/guía de tallas — cualquier admin activo
+ * salvo demo). Cuando el bloqueo es por modo demo, la respuesta lleva
+ * `demo: true` — es la señal que el front (fetchJson en apiCliente.ts) usa
+ * para mostrar el modal de aviso en vez de solo un toast de error.
+ */
+export async function requierePermisoEscritura(
+  supabase: SupabaseClient,
+  tipo: "catalogo" | "operativo",
+): Promise<{ ok: true; perfil: PerfilAdmin } | { ok: false; respuesta: NextResponse }> {
+  const perfil = await obtenerAdminActivo(supabase);
+  if (!perfil) {
+    return { ok: false, respuesta: NextResponse.json({ ok: false, mensaje: "No autenticado." }, { status: 401 }) };
+  }
 
-  const [payload, firma] = token.split(".");
-  if (!payload || !firma) return false;
+  const permitido = tipo === "catalogo" ? puedeEscribirCatalogo(perfil) : puedeEscribirOperativo(perfil);
+  if (permitido) return { ok: true, perfil };
 
-  const expira = Number(payload);
-  if (!Number.isFinite(expira) || Date.now() > expira) return false;
-
-  const firmaEsperada = await firmar(payload, secreto);
-  return compararConstante(firma, firmaEsperada);
+  if (perfil.solo_lectura) {
+    return {
+      ok: false,
+      respuesta: NextResponse.json(
+        { ok: false, mensaje: "Estás en modo demostración — no se pueden guardar cambios.", demo: true },
+        { status: 403 },
+      ),
+    };
+  }
+  return {
+    ok: false,
+    respuesta: NextResponse.json({ ok: false, mensaje: "Tu rol no tiene permiso para esta acción." }, { status: 403 }),
+  };
 }
-
-export function validarPassword(intento: string): boolean {
-  const esperado = process.env.ADMIN_PASSWORD;
-  if (!esperado) return false;
-  return compararConstante(intento, esperado);
-}
-
-export const MAX_AGE_COOKIE_SEGUNDOS = DURACION_SESION_MS / 1000;

@@ -28,8 +28,8 @@ export async function GET() {
       },
     });
   } catch (err) {
-    const mensaje = err instanceof Error ? err.message : "No se pudo obtener el archivo original.";
-    logError("api/admin/original", err, pistaBlob(mensaje));
-    return NextResponse.json({ ok: false, mensaje }, { status: 500 });
+    const detalle = err instanceof Error ? err.message : String(err);
+    logError("api/admin/original", err, pistaBlob(detalle));
+    return NextResponse.json({ ok: false, mensaje: "No se pudo obtener el archivo original." }, { status: 500 });
   }
 }

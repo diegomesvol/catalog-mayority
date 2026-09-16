@@ -3,6 +3,7 @@
 import { useId, useState, type FormEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useBusqueda } from "@/components/catalogo/BusquedaContext";
+import { iniciarNavegacion } from "@/lib/navegacion";
 
 // Buscador global en el navbar: visible en cualquier parte del scroll (el
 // Header ya es sticky), no solo arriba del catálogo.
@@ -19,8 +20,12 @@ import { useBusqueda } from "@/components/catalogo/BusquedaContext";
 export function BuscadorNavbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { busqueda, setBusqueda } = useBusqueda();
-  const enCatalogo = pathname === "/";
+  const { busqueda, setBusqueda, modoVivo } = useBusqueda();
+  // pathname === "/" no alcanza: en "/" puede estar mostrándose el landing
+  // de colecciones (sin grilla montada) en vez del catálogo — ver la nota
+  // en BusquedaContext.tsx. Ahí, igual que en el detalle de producto, el
+  // input queda como borrador local y Enter navega a "/?q=…".
+  const enCatalogo = pathname === "/" && modoVivo;
   const id = useId();
 
   const [borrador, setBorrador] = useState(busqueda);
@@ -45,6 +50,7 @@ export function BuscadorNavbar() {
     if (enCatalogo) return; // ya filtra en vivo, no hace falta confirmar
     const texto = borrador.trim();
     setBusqueda(texto);
+    iniciarNavegacion();
     router.push(texto ? `/?q=${encodeURIComponent(texto)}` : "/");
   }
 
@@ -57,11 +63,11 @@ export function BuscadorNavbar() {
       <label htmlFor={id} className="sr-only">
         Buscar por modelo, marca, color o código SAP
       </label>
-      <div className="relative">
+      <div className="relative min-w-0">
         <button
           type="submit"
           aria-label="Buscar en el catálogo"
-          className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${valor ? "text-white" : "text-ink-500"}`}
+          className={`absolute left-2.5 top-1/2 -translate-y-1/2 transition-colors duration-200 ${valor ? "text-ink-900" : "text-ink-500"}`}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
             <circle cx="11" cy="11" r="7" />
@@ -74,12 +80,22 @@ export function BuscadorNavbar() {
           placeholder={enCatalogo ? "Buscar…" : "Buscar en el catálogo…"}
           value={valor}
           onChange={(e) => onChange(e.target.value)}
-          // Mismo criterio visual que un Select/chip de filtro activo (ver
-          // Filtros.tsx): borde + fondo marcados en cuanto hay texto, para
-          // que quede claro de un vistazo que ese filtro sigue puesto aunque
-          // el buscador ya no tenga el foco.
-          className={`w-full rounded-full border py-1.5 pl-8 pr-3 text-sm placeholder:text-ink-500 focus:border-accent-600 ${
-            valor ? "border-ink-900 bg-ink-900 font-medium text-white" : "border-ink-200 bg-paper-raised text-ink-900"
+          // Fondo siempre claro/transparente (nunca se rellena de negro):
+          // el filtro activo se comunica solo con el borde y el ícono
+          // pasando a ink-900, más el texto en negrita — un contraste
+          // sutil pero claro, con transición fluida, en vez de repintar
+          // toda la barra al escribir.
+          //
+          // min-w-0: un <input> tiene un ancho mínimo intrínseco propio (el
+          // navegador lo calcula aparte de w-full) que puede superar el
+          // ancho real de su celda del grid (Header) cuando esa celda se
+          // achica — ej. al aparecer el botón de cancelar de
+          // DescargaOffline o el de login, la columna derecha "auto" crece
+          // y empuja a esta celda "minmax(0,1fr)" a un ancho chico. Sin
+          // min-w-0 el input ignora esa celda y se desborda por encima de
+          // los botones de al lado en vez de encogerse con ella.
+          className={`w-full min-w-0 rounded-full border bg-paper-raised py-1.5 pl-8 pr-3 text-sm text-ink-900 placeholder:text-ink-500 transition-colors duration-200 focus:border-accent-600 ${
+            valor ? "border-ink-900 font-medium" : "border-ink-200"
           }`}
         />
       </div>

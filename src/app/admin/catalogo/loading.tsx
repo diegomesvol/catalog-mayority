@@ -5,8 +5,7 @@ import { AdminHeader } from "@/components/admin/AdminHeader";
 // blanco — mismo criterio que el resto de los loading.tsx del proyecto.
 export default function CargandoCatalogoAdmin() {
   return (
-    <>
-      <AdminHeader />
+    <AdminHeader>
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:px-6 sm:py-8" aria-label="Cargando" role="status">
         {Array.from({ length: 3 }).map((_, i) => (
           <div key={i} className="mt-6 rounded-2xl border border-ink-200 p-4 first:mt-0 sm:p-5">
@@ -25,6 +24,6 @@ export default function CargandoCatalogoAdmin() {
           </div>
         </div>
       </main>
-    </>
+    </AdminHeader>
   );
 }

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardarGuiaTallas, leerGuiaTallas, subirImagenGuiaTallas } from "@/lib/blob";
+import { eliminarImagenPublica, guardarGuiaTallas, leerGuiaTallas, subirImagenGuiaTallas } from "@/lib/blob";
 import type { GuiaTallas } from "@/lib/types";
 import { logError, pistaBlob } from "@/lib/logger";
+import { crearClienteServidor } from "@/lib/supabase";
+import { requierePermisoEscritura } from "@/lib/auth";
 
 // Guía de tallas: config aparte del catálogo (no cambia con cada carga de
 // Excel — ver la nota en lib/blob.ts). El admin sube una imagen o pega un
@@ -18,14 +20,18 @@ export async function GET() {
     const guia = await leerGuiaTallas();
     return NextResponse.json({ ok: true, guia });
   } catch (err) {
-    const mensaje = err instanceof Error ? err.message : "No se pudo leer la guía de tallas.";
-    logError("api/admin/guia-tallas GET", err, pistaBlob(mensaje));
-    return NextResponse.json({ ok: false, mensaje }, { status: 500 });
+    const detalle = err instanceof Error ? err.message : String(err);
+    logError("api/admin/guia-tallas GET", err, pistaBlob(detalle));
+    return NextResponse.json({ ok: false, mensaje: "No se pudo leer la guía de tallas." }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await crearClienteServidor();
+    const permiso = await requierePermisoEscritura(supabase, "operativo");
+    if (!permiso.ok) return permiso.respuesta;
+
     const formData = await request.formData();
     const actual = await leerGuiaTallas();
     const nueva: GuiaTallas = { ...actual };
@@ -67,10 +73,16 @@ export async function POST(request: NextRequest) {
     }
 
     await guardarGuiaTallas(nueva);
+    // "actual" es lo que había ANTES de mezclar — si un campo cambió (nuevo
+    // archivo, link, o "Eliminar") y lo viejo era nuestro, el archivo
+    // anterior queda huérfano en Storage si nadie lo borra.
+    for (const campo of CAMPOS satisfies readonly Campo[]) {
+      if (actual[campo] && actual[campo] !== nueva[campo]) void eliminarImagenPublica(actual[campo]);
+    }
     return NextResponse.json({ ok: true, guia: nueva });
   } catch (err) {
-    const mensaje = err instanceof Error ? err.message : "No se pudo guardar la guía de tallas.";
-    logError("api/admin/guia-tallas POST", err, pistaBlob(mensaje));
-    return NextResponse.json({ ok: false, mensaje }, { status: 500 });
+    const detalle = err instanceof Error ? err.message : String(err);
+    logError("api/admin/guia-tallas POST", err, pistaBlob(detalle));
+    return NextResponse.json({ ok: false, mensaje: "No se pudo guardar la guía de tallas." }, { status: 500 });
   }
 }

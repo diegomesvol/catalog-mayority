@@ -11,6 +11,8 @@ import { transformarFilas, validarColumnas } from "@/lib/transform";
 import { compararCatalogos } from "@/lib/diffCatalogo";
 import type { ResumenImportacion } from "@/lib/types";
 import { logError, pistaBlob } from "@/lib/logger";
+import { crearClienteServidor } from "@/lib/supabase";
+import { requierePermisoEscritura } from "@/lib/auth";
 
 // El archivo llega directo en el body del pedido (multipart/form-data) — pasa
 // por esta función serverless, así que está sujeto al límite de tamaño de
@@ -22,6 +24,10 @@ import { logError, pistaBlob } from "@/lib/logger";
 // entra sin problema en 4.5 MB.
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await crearClienteServidor();
+    const permiso = await requierePermisoEscritura(supabase, "catalogo");
+    if (!permiso.ok) return permiso.respuesta;
+
     const formData = await request.formData();
     const tipo = String(formData.get("tipo") ?? "");
 
@@ -135,16 +141,18 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, resumen, diff });
   } catch (err) {
-    const mensaje = err instanceof Error ? err.message : "Error inesperado al procesar el archivo.";
-    logError("api/admin/upload", err, pistaBlob(mensaje));
+    const detalle = err instanceof Error ? err.message : String(err);
+    logError("api/admin/upload", err, pistaBlob(detalle));
 
     // El body de una función serverless de Vercel no puede superar ~4.5 MB —
     // Next.js corta la conexión y esto suele llegar acá como un error de
-    // parseo del body en vez de un mensaje claro.
-    const pista = /body|payload|exceeds|too large/i.test(mensaje)
-      ? " El archivo probablemente pesa más de 4.5 MB (el límite de las funciones serverless de Vercel) — probá con un archivo más liviano."
-      : "";
+    // parseo del body en vez de un mensaje claro. El detalle interno
+    // (`detalle`) solo se usa para detectar ese caso y para el log — nunca
+    // se manda crudo al cliente.
+    const mensaje = /body|payload|exceeds|too large/i.test(detalle)
+      ? "El archivo probablemente pesa más de 4.5 MB (el límite de las funciones serverless de Vercel) — probá con un archivo más liviano."
+      : "Error inesperado al procesar el archivo.";
 
-    return NextResponse.json({ ok: false, mensaje: mensaje + pista }, { status: 500 });
+    return NextResponse.json({ ok: false, mensaje }, { status: 500 });
   }
 }

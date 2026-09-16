@@ -1,21 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Image from "next/image";
 import { toast } from "sonner";
 import { useCarrito } from "./CarritoContext";
-import {
-  linkWhatsAppPedido,
-  subtotalDelItem,
-  totalCarrito,
-  unidadesDelItem,
-  type DatosComprador,
-  type ItemCarrito,
-} from "@/lib/carrito";
+import { subtotalDelItem, totalCarrito, unidadesDelItem, type ItemCarrito } from "@/lib/carrito";
 import { formatearPrecio } from "@/lib/format";
-import { logError } from "@/lib/logger";
-
-type Errores = Partial<Record<keyof DatosComprador, string>>;
+import { usePedidoWhatsApp } from "@/hooks/usePedidoWhatsApp";
 
 // Mismo patrón de confirmación por toast que ColeccionesConfig.tsx
 // (confirmarEliminar) — al agrandar el botón de vaciar para que sea más
@@ -30,67 +20,21 @@ function confirmarVaciar(alConfirmar: () => void) {
   });
 }
 
-function validarComprador(c: DatosComprador): Errores {
-  const errores: Errores = {};
-  if (!c.nombre.trim()) errores.nombre = "Falta el nombre.";
-  if (!c.empresa.trim()) errores.empresa = "Falta el nombre de la empresa.";
-  if (!c.telefono.trim()) errores.telefono = "Falta el teléfono.";
-  if (!c.rif.trim()) errores.rif = "Falta el RIF.";
-  return errores;
-}
-
 export function CarritoDrawer() {
-  const { items, comprador, abierto, numeroWhatsApp, actualizarCantidad, quitarItem, vaciar, setComprador, cerrar } = useCarrito();
-  const [errores, setErrores] = useState<Errores>({});
+  const { items, comprador, abierto, numeroWhatsApp, clienteLogueado, perfilCompleto, actualizarCantidad, quitarItem, vaciar, setComprador, cerrar } =
+    useCarrito();
   const numeroConfigurado = numeroWhatsApp;
-
-  // Cierra con Escape — patrón esperado de cualquier panel/diálogo lateral.
-  useEffect(() => {
-    if (!abierto) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") cerrar();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [abierto, cerrar]);
-
-  useEffect(() => {
-    if (!numeroConfigurado) {
-      logError(
-        "CarritoDrawer",
-        "Falta configurar el número de WhatsApp de ventas.",
-        "Configuralo desde el panel de administración (Configuración → WhatsApp de ventas), o como respaldo agregá NEXT_PUBLIC_WHATSAPP_VENTAS en Vercel → el proyecto → Settings → Environment Variables (formato internacional, ej. 584121234567, sin '+' ni espacios; requiere volver a desplegar).",
-      );
-    }
-    // Solo se registra una vez al montar el panel — no en cada render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function campo<K extends keyof DatosComprador>(clave: K, valor: string) {
-    setComprador({ ...comprador, [clave]: valor });
-    if (errores[clave]) setErrores({ ...errores, [clave]: undefined });
-  }
-
-  function enviarPorWhatsApp() {
-    if (items.length === 0) return;
-    const erroresActuales = validarComprador(comprador);
-    setErrores(erroresActuales);
-    if (Object.keys(erroresActuales).length > 0) {
-      // Mensaje inline junto a cada campo (abajo) en vez de un toast
-      // genérico — un toast en la esquina inferior tapa justo el botón de
-      // envío, que está fijo ahí mismo. Se enfoca el primer campo con error
-      // para que quede claro qué falta sin tener que leer todo el panel.
-      const primerCampoConError = Object.keys(erroresActuales)[0] as keyof DatosComprador;
-      document.getElementById(`comprador-${primerCampoConError}`)?.focus();
-      return;
-    }
-    const link = linkWhatsAppPedido(items, comprador, numeroWhatsApp);
-    if (!link) {
-      toast.error("El envío por WhatsApp todavía no está configurado. Avisale al administrador del sitio.");
-      return;
-    }
-    window.open(link, "_blank", "noopener,noreferrer");
-  }
+  const { errores, campo, enviarPorWhatsApp, realizarPedido, temblando, enviandoPedido } = usePedidoWhatsApp({
+    abierto,
+    cerrar,
+    items,
+    comprador,
+    numeroWhatsApp,
+    clienteLogueado,
+    perfilCompleto,
+    setComprador,
+    vaciar,
+  });
 
   return (
     <>
@@ -197,6 +141,18 @@ export function CarritoDrawer() {
                 <span className="text-sm text-ink-500">Total</span>
                 <span className="text-lg font-semibold text-ink-900">{formatearPrecio(totalCarrito(items))}</span>
               </div>
+              {clienteLogueado && (
+                <button
+                  type="button"
+                  onClick={() => void realizarPedido()}
+                  disabled={enviandoPedido}
+                  className={`mb-2 flex w-full items-center justify-center gap-2 rounded-full border-2 border-ink-900 px-4 py-3 text-sm font-medium text-ink-900 transition-colors hover:bg-ink-100 disabled:cursor-not-allowed disabled:opacity-50 ${
+                    temblando ? "animate-shake" : ""
+                  }`}
+                >
+                  {enviandoPedido ? "Enviando…" : "Realizar pedido"}
+                </button>
+              )}
               {!numeroConfigurado && (
                 <p className="mb-2 text-xs text-danger-600">
                   El envío por WhatsApp no está disponible por ahora. Probá de nuevo más tarde o contactá directamente a ventas.
@@ -273,13 +229,20 @@ function ItemCarritoFila({
             <input
               type="number"
               min={1}
+              max={item.stockDisponible}
               inputMode="numeric"
               value={item.cantidad}
               onChange={(e) => cambiarCantidad(e.target.value)}
               aria-label={item.esCalzado ? "Cantidad de bultos" : "Cantidad de unidades"}
               className="w-10 border-x border-ink-200 py-1 text-center text-xs"
             />
-            <button type="button" onClick={() => onCantidad(item.cantidad + 1)} aria-label="Sumar" className="px-2 py-1 text-ink-700 hover:text-ink-900">
+            <button
+              type="button"
+              onClick={() => onCantidad(item.cantidad + 1)}
+              disabled={item.cantidad >= item.stockDisponible}
+              aria-label="Sumar"
+              className="px-2 py-1 text-ink-700 hover:text-ink-900 disabled:cursor-not-allowed disabled:text-ink-300 disabled:hover:text-ink-300"
+            >
               +
             </button>
           </div>
@@ -287,6 +250,9 @@ function ItemCarritoFila({
             {item.esCalzado ? `${item.cantidad} bulto${item.cantidad === 1 ? "" : "s"} · ${unidadesDelItem(item)} pares` : `${item.cantidad} unidad${item.cantidad === 1 ? "" : "es"}`}
           </span>
         </div>
+        {item.cantidad >= item.stockDisponible && (
+          <span className="text-[11px] text-ink-500">Máximo disponible en stock.</span>
+        )}
         <span className="self-end text-sm font-medium text-ink-900">{formatearPrecio(subtotalDelItem(item))}</span>
       </div>
     </li>

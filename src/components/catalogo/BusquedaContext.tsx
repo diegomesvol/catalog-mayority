@@ -17,6 +17,14 @@ import { useSearchParams } from "next/navigation";
 interface BusquedaContextValor {
   busqueda: string;
   setBusqueda: (v: string) => void;
+  // true solo mientras CatalogoClient está montado (grilla filtrando en
+  // vivo). En "/" también puede estar mostrándose el landing de colecciones
+  // (ColeccionesHome, ver page.tsx) en vez de la grilla — ese componente no
+  // lee búsqueda, así que sin este flag BuscadorNavbar no tenía forma de
+  // saber que escribir ahí no filtraba nada (el bug real de "la búsqueda no
+  // anda": pathname === "/" no implica que la grilla esté montada).
+  modoVivo: boolean;
+  setModoVivo: (v: boolean) => void;
 }
 
 const BusquedaContext = createContext<BusquedaContextValor | null>(null);
@@ -27,8 +35,13 @@ export function BusquedaProvider({ children }: { children: ReactNode }) {
   // arranca con el buscador ya lleno, no vacío.
   const searchParamsIniciales = useSearchParams();
   const [busqueda, setBusqueda] = useState(() => searchParamsIniciales.get("q") ?? "");
+  const [modoVivo, setModoVivo] = useState(false);
 
-  return <BusquedaContext.Provider value={{ busqueda, setBusqueda }}>{children}</BusquedaContext.Provider>;
+  return (
+    <BusquedaContext.Provider value={{ busqueda, setBusqueda, modoVivo, setModoVivo }}>
+      {children}
+    </BusquedaContext.Provider>
+  );
 }
 
 export function useBusqueda(): BusquedaContextValor {

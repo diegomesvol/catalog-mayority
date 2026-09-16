@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 
 const FALLBACK = "/imagen-no-disponible.svg";
@@ -32,6 +32,23 @@ interface Props {
 export function ImagenProducto({ src, alt, sizes, className, priority, ajuste = "cubrir" }: Props) {
   const [conError, setConError] = useState(false);
   const [cargada, setCargada] = useState(false);
+  // Sin esto, una misma instancia cuyo "src" cambia en caliente (ej. al
+  // previsualizar variantes de color en ProductCard, donde la foto grande
+  // es UNA sola instancia que va rotando de src) arrastraría el
+  // error/loading de la foto ANTERIOR: si esa falló, se seguiría mostrando
+  // el fallback aunque la nueva sí exista. No afecta a los usos que montan
+  // una instancia por src fijo (ej. Carrusel) — ahí este efecto solo corre
+  // una vez, sobre valores que ya estaban en su default. El "await" inicial
+  // difiere el setState un microtask — evita el warning set-state-in-effect
+  // (mismo patrón que ClientesAdmin/PedidosAdmin) sin cambiar el comportamiento.
+  useEffect(() => {
+    async function reiniciar() {
+      await Promise.resolve();
+      setConError(false);
+      setCargada(false);
+    }
+    reiniciar();
+  }, [src]);
   const urlFinal = !src || conError ? FALLBACK : src;
 
   if (ajuste === "natural") {
