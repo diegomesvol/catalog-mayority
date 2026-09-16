@@ -1,4 +1,4 @@
-export type IdIconoAdmin = "dashboard" | "catalogo" | "colecciones" | "clientes" | "pedidos" | "configuracion";
+export type IdIconoAdmin = "dashboard" | "catalogo" | "inventario" | "colecciones" | "clientes" | "pedidos" | "configuracion";
 
 interface Props {
   id: IdIconoAdmin;
@@ -42,6 +42,14 @@ export function IconoSeccionAdmin({ id, className }: Props) {
           <path d="M21 7.5 12 3 3 7.5l9 4.5 9-4.5Z" />
           <path d="M3 7.5v9l9 4.5 9-4.5v-9" />
           <path d="M12 12v9" />
+        </svg>
+      );
+    case "inventario":
+      return (
+        <svg {...comun}>
+          <path d="M3.5 7.5 12 3l8.5 4.5-8.5 4.5-8.5-4.5Z" />
+          <path d="M4.5 9.75V16c0 .5.28.96.73 1.19L11.3 20.6a1.5 1.5 0 0 0 1.4 0l6.07-3.41c.45-.23.73-.7.73-1.19V9.75" />
+          <line x1="12" y1="12" x2="12" y2="20.75" />
         </svg>
       );
     case "colecciones":

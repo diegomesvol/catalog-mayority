@@ -28,6 +28,7 @@ export interface ItemNavAdmin {
 export const NAV_ADMIN: ItemNavAdmin[] = [
   { href: "/admin", etiqueta: "Dashboard", icono: "dashboard" },
   { href: "/admin/catalogo", etiqueta: "Catálogo", icono: "catalogo" },
+  { href: "/admin/inventario", etiqueta: "Inventario", icono: "inventario" },
   { href: "/admin/colecciones", etiqueta: "Colecciones", icono: "colecciones" },
   { href: "/admin/clientes", etiqueta: "Clientes", icono: "clientes" },
   { href: "/admin/pedidos", etiqueta: "Pedidos", icono: "pedidos" },

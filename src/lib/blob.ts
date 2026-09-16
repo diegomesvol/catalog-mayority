@@ -12,11 +12,14 @@ import type {
   Catalogo,
   Coleccion,
   ConfigSitio,
+  Curva,
   EntradaHistorial,
   GuiaTallas,
   LogoFooter,
   Producto,
   ResumenImportacion,
+  TallaVariante,
+  VarianteColor,
 } from "./types";
 import { logError } from "./logger";
 
@@ -730,5 +733,134 @@ export async function guardarConfigSitio(config: ConfigSitio): Promise<void> {
       },
       { onConflict: "id" },
     );
+  if (error) throw error;
+}
+
+// =============================================================================
+// Inventario (/admin/inventario) — edición directa de stock por talla y
+// umbral de "bajo stock" por producto (Diego eligió, explícitamente, la
+// opción simple: UPDATE directo sobre la carga activa, SIN tabla de
+// "ajustes durables" — un reimport de SAP pisa cualquier corrección manual,
+// es un corrector rápido entre importaciones, no un sistema paralelo de
+// inventario). El umbral en cambio SÍ es durable (tabla aparte,
+// umbrales_stock_producto — ver esa migración): es una decisión de negocio
+// del admin, no un dato que deba venir de SAP.
+// =============================================================================
+
+export interface TallaInventario extends TallaVariante {
+  id: string; // id real de la fila en `tallas` — hace falta para poder direccionar el PATCH de una talla puntual (el Producto público no lo expone, ver la nota abajo).
+}
+export interface CurvaInventario extends Omit<Curva, "tallas"> {
+  tallas: TallaInventario[];
+}
+export interface VarianteColorInventario extends Omit<VarianteColor, "curvas"> {
+  curvas: CurvaInventario[];
+}
+export interface ProductoInventario extends Omit<Producto, "colores"> {
+  colores: VarianteColorInventario[];
+}
+
+const SELECT_ARBOL_PRODUCTOS_INVENTARIO = `
+  slug, modelo, marca, genero, rubro, linea, codigo_modelo,
+  material_exterior, material_interior, material_suela, tipo_calzado,
+  variantes_color (
+    color, precio, promocion, fotos,
+    curvas (
+      rango, codigo_sap, cantidad_por_bulto,
+      tallas ( id, talla, disponible, disponible_fisico, por_bulto )
+    )
+  )
+`;
+
+interface FilaTallaInventarioDB extends FilaTallaDB {
+  id: string;
+}
+interface FilaCurvaInventarioDB extends Omit<FilaCurvaDB, "tallas"> {
+  tallas: FilaTallaInventarioDB[];
+}
+interface FilaVarianteInventarioDB extends Omit<FilaVarianteDB, "curvas"> {
+  curvas: FilaCurvaInventarioDB[];
+}
+interface FilaProductoInventarioDB extends Omit<FilaProductoDB, "variantes_color"> {
+  variantes_color: FilaVarianteInventarioDB[];
+}
+
+/**
+ * Reutiliza mapearProductoDesdeDB (misma lógica de siempre: slugify de
+ * curva.id, defaults de materiales, etc.) y le injerta el id real de cada
+ * talla por posición — la fila de origen (`p`) y el resultado mapeado
+ * recorren colores/curvas/tallas en el mismo orden, así que es seguro
+ * "pegar" los ids así en vez de duplicar todo el mapeo de nuevo.
+ */
+function mapearProductoInventarioDesdeDB(p: FilaProductoInventarioDB): ProductoInventario {
+  const base = mapearProductoDesdeDB(p as unknown as FilaProductoDB);
+  return {
+    ...base,
+    colores: base.colores.map((color, iColor) => ({
+      ...color,
+      curvas: color.curvas.map((curva, iCurva) => ({
+        ...curva,
+        tallas: curva.tallas.map((talla, iTalla) => ({
+          ...talla,
+          id: p.variantes_color[iColor].curvas[iCurva].tallas[iTalla].id,
+        })),
+      })),
+    })),
+  };
+}
+
+/**
+ * Catálogo activo con el id real de cada talla — SOLO para el Panel de
+ * Inventario, que necesita direccionar una talla puntual al editarla.
+ * leerCatalogoPublico() (usado por el resto de la app) sigue exactamente
+ * igual, sin tocar: no hace falta exponer ids internos de Postgres en el
+ * catálogo público ni arriesgar a ninguno de sus consumidores actuales.
+ */
+export async function leerCatalogoParaInventario(): Promise<ProductoInventario[]> {
+  const supabase = await crearClienteServidor();
+  const { data: activo, error: errorActivo } = await supabase.from("catalogo_activo").select("carga_id").eq("id", true).maybeSingle();
+  if (errorActivo) throw errorActivo;
+  if (!activo?.carga_id) return [];
+
+  const { data: productos, error } = await supabase
+    .from("productos")
+    .select(SELECT_ARBOL_PRODUCTOS_INVENTARIO)
+    .eq("carga_id", activo.carga_id);
+  if (error) throw error;
+
+  return ((productos ?? []) as unknown as FilaProductoInventarioDB[]).map(mapearProductoInventarioDesdeDB);
+}
+
+/** Edición rápida de UNA talla desde el modal del Panel de Inventario. */
+export async function actualizarStockTalla(tallaId: string, disponible: number, disponibleFisico: number): Promise<void> {
+  const supabase = await crearClienteServidor();
+  const { error } = await supabase.from("tallas").update({ disponible, disponible_fisico: disponibleFisico }).eq("id", tallaId);
+  if (error) throw error;
+}
+
+/** Bulk action "Marcar como agotados" de la barra de selección múltiple. */
+export async function agotarTallasMasivo(tallaIds: string[]): Promise<void> {
+  const supabase = await crearClienteServidor();
+  const { error } = await supabase.from("tallas").update({ disponible: 0, disponible_fisico: 0 }).in("id", tallaIds);
+  if (error) throw error;
+}
+
+export async function leerUmbralesStock(): Promise<Record<string, number>> {
+  const supabase = await crearClienteServidor();
+  const { data, error } = await supabase.from("umbrales_stock_producto").select("producto_slug, umbral");
+  if (error) throw error;
+  const mapa: Record<string, number> = {};
+  for (const fila of data ?? []) mapa[fila.producto_slug as string] = fila.umbral as number;
+  return mapa;
+}
+
+export async function guardarUmbralStock(slug: string, umbral: number): Promise<void> {
+  const supabase = await crearClienteServidor();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { error } = await supabase
+    .from("umbrales_stock_producto")
+    .upsert({ producto_slug: slug, umbral, actualizado_por: user?.id ?? null, actualizado_en: new Date().toISOString() });
   if (error) throw error;
 }
