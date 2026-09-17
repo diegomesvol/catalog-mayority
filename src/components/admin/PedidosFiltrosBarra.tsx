@@ -42,7 +42,7 @@ export function PedidosFiltrosBarra({
         </label>
         <input
           id="pedidos-busqueda"
-          type="text"
+          type="search"
           value={busqueda}
           onChange={(e) => onBusqueda(e.target.value)}
           placeholder="N.° de orden, cliente, empresa o RIF/cédula…"
@@ -98,7 +98,7 @@ export function PedidosFiltrosBarra({
       <button
         type="button"
         onClick={onExportarTodo}
-        className="shrink-0 rounded-full border border-ink-200 bg-paper-raised px-4 py-2 text-sm font-medium text-ink-900 transition-colors hover:border-ink-900"
+        className="rounded-full border border-ink-200 bg-paper-raised px-3.5 py-2 text-xs font-medium text-ink-900 transition-colors hover:border-ink-900 sm:ml-auto"
       >
         Exportar todo
       </button>

@@ -21,31 +21,37 @@ export function logError(contexto: string, error: unknown, pista?: string): void
 }
 
 /**
- * Diagnóstico automático para errores de Vercel Blob: varios mensajes de
- * esa librería son crípticos fuera de contexto — acá se traducen a una
- * pista accionable cuando el texto del error los delata.
+ * Diagnóstico automático para errores de Supabase Storage: varios mensajes
+ * del SDK son crípticos fuera de contexto — acá se traducen a una pista
+ * accionable cuando el texto del error los delata. Antes apuntaba a Vercel
+ * Blob (BLOB_READ_WRITE_TOKEN, etc.) — el proyecto migró por completo a
+ * Supabase Storage (ver la nota al inicio de lib/blob.ts) y esa pista ya no
+ * aplicaba a ningún error real; quedaba mostrando una solución de un
+ * proveedor que este proyecto ya no usa. Reescrita 2026-09-17 (auditoría).
  */
 export function pistaBlob(mensaje: string): string | undefined {
-  if (/BLOB_READ_WRITE_TOKEN|credentials|Invalid `token`/i.test(mensaje)) {
+  if (/bucket.*not.*found|not_found.*bucket/i.test(mensaje)) {
     return (
-      "Falta (o está mal) la variable de entorno BLOB_READ_WRITE_TOKEN en Vercel. " +
-      "El token OIDC automático (BLOB_STORE_ID) alcanza para que el servidor lea/escriba " +
-      "el catálogo, pero NO alcanza para autorizar subidas directas desde el navegador " +
-      "('client upload') — esa función pide específicamente el token de lectura-escritura. " +
-      "Solución: Vercel → tu proyecto → pestaña Storage → el store de Blob conectado → " +
-      "copiar el 'BLOB_READ_WRITE_TOKEN' (o generarlo si no existe) → Settings → " +
-      "Environment Variables → pegarlo ahí (Production) → Redeploy."
+      "El bucket de Storage no existe o tiene otro nombre en este proyecto de Supabase. " +
+      "Revisá Supabase Dashboard → Storage → que exista el bucket 'publico' (o 'privado' " +
+      "para el original del catálogo) y que el nombre coincida con BUCKET_PUBLICO en lib/blob.ts."
     );
   }
-  if (/BlobNotFoundError|not_found/i.test(mensaje)) {
-    return "El archivo no existe en Blob todavía — normal si es la primera carga del catálogo, no requiere acción.";
-  }
-  if (/Cannot use public access on a private store/i.test(mensaje)) {
+  if (/row-level security|permission denied|new row violates row-level security/i.test(mensaje)) {
     return (
-      "El store de Blob conectado es privado — no admite access:'public'. " +
-      "Las subidas de imágenes visibles al público (colecciones, guía de tallas) deben subir con " +
-      "access:'private' y servirse a través de /api/imagenes/[...pathname] (ver lib/blob.ts)."
+      "RLS de Storage rechazó la operación — la sesión del admin no tiene permiso de " +
+      "escritura sobre ese bucket/carpeta, o expiró. Revisá las políticas de storage.objects " +
+      "para el bucket correspondiente y que la cookie de sesión siga siendo válida."
     );
+  }
+  if (/Object not found|400.*not found/i.test(mensaje)) {
+    return "El archivo no existe en Storage — normal si ya se había borrado o si es la primera carga, no requiere acción.";
+  }
+  if (/exceeded the maximum allowed size|Payload too large/i.test(mensaje)) {
+    return "El archivo supera el límite de tamaño configurado en el bucket de Supabase Storage (revisar en Dashboard → Storage → el bucket → Settings).";
+  }
+  if (/Invalid key|Invalid path/i.test(mensaje)) {
+    return "La ruta del archivo tiene caracteres no válidos para Storage (Supabase es más estricto que el sistema de archivos local con el nombre de los objetos).";
   }
   return undefined;
 }

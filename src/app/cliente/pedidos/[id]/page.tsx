@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { crearClienteServidor } from "@/lib/supabase";
 import { obtenerClienteActivo } from "@/lib/clienteAuth";
-import { formatearPrecio } from "@/lib/format";
+import { formatearFecha, formatearPrecio } from "@/lib/format";
 import { subtotalDelItem, unidadesDelItem, type DatosComprador, type ItemCarrito } from "@/lib/carrito";
 import { logError } from "@/lib/logger";
 import { EstadoPedidoBadge } from "@/components/pedidos/EstadoPedidoBadge";
@@ -22,10 +22,6 @@ interface Pedido {
   metodo_pago: MetodoPago | null;
   metodo_envio: MetodoEnvio | null;
   direccion_envio: string | null;
-}
-
-function formatearFecha(iso: string): string {
-  return new Date(iso).toLocaleDateString("es-VE", { day: "2-digit", month: "long", year: "numeric" });
 }
 
 // Vista detallada de UN pedido propio — RLS (propio_pedido_select) ya
@@ -57,7 +53,7 @@ export default async function PaginaDetallePedidoCliente({ params }: { params: P
         <div className="mt-3 flex items-start justify-between gap-3">
           <div>
             <h1 className="text-base font-semibold text-ink-900">Pedido {p.id.slice(0, 8).toUpperCase()}</h1>
-            <p className="text-sm text-ink-500">{formatearFecha(p.creado_en)}</p>
+            <p className="text-sm text-ink-500">{formatearFecha(p.creado_en, { mes: "long" })}</p>
           </div>
           <EstadoPedidoBadge estado={p.estado} />
         </div>

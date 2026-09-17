@@ -1,9 +1,9 @@
 "use client";
 
-import { useCarrito } from "./CarritoContext";
+import { useCarritoResumen } from "./CarritoContext";
 
 export function CarritoBoton() {
-  const { items, abrir } = useCarrito();
+  const { items, abrir } = useCarritoResumen();
   const cantidad = items.length;
 
   return (

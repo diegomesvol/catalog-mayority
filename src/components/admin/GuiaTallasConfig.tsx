@@ -179,7 +179,7 @@ function CampoGuia({
 
   return (
     <div className="rounded-xl border border-ink-200 p-3">
-      <label htmlFor={id} className="mb-2 block text-xs font-medium text-ink-900">
+      <label htmlFor={id} className="mb-2 block text-xs font-medium text-ink-500">
         {etiqueta}
       </label>
 

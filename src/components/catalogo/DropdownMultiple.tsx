@@ -17,11 +17,24 @@ interface Props {
 // cargada), igual que antes.
 export function DropdownMultiple({ etiqueta, opciones, seleccionados, onChange }: Props) {
   const [abierto, setAbierto] = useState(false);
+  // Cuando el botón está cerca del borde derecho de la pantalla (ej. la
+  // última columna de la grilla de 2/3/5 de Filtros.tsx), anclar el panel
+  // por "left-0" lo empuja fuera del viewport — antes se veía cortado o
+  // directamente inaccesible en mobile (hallazgo Alto de la auditoría
+  // 2026-09-17). Se mide en cuanto se abre y, si no entra a la derecha, se
+  // ancla por "right-0" en su lugar.
+  const [alinearDerecha, setAlinearDerecha] = useState(false);
   const contenedorRef = useRef<HTMLDivElement>(null);
   const idPanel = useId();
+  const ANCHO_PANEL_PX = 224; // w-56
 
   useEffect(() => {
     if (!abierto) return;
+    const rect = contenedorRef.current?.getBoundingClientRect();
+    if (rect) {
+      const margen = 16; // mismo margen que max-w-[calc(100vw-2rem)] de abajo
+      setAlinearDerecha(rect.left + ANCHO_PANEL_PX > window.innerWidth - margen);
+    }
     function onPointerDown(e: MouseEvent) {
       if (!contenedorRef.current?.contains(e.target as Node)) setAbierto(false);
     }
@@ -86,7 +99,9 @@ export function DropdownMultiple({ etiqueta, opciones, seleccionados, onChange }
           id={idPanel}
           role="group"
           aria-label={`Filtrar por ${etiqueta.toLowerCase()}`}
-          className="absolute left-0 z-20 mt-2 w-56 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-ink-200 bg-paper-raised py-2 shadow-xl"
+          className={`absolute z-20 mt-2 w-56 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-ink-200 bg-paper-raised py-2 shadow-xl ${
+            alinearDerecha ? "right-0" : "left-0"
+          }`}
         >
           <div className="flex items-center justify-between px-3.5 pb-1.5">
             <span className="text-xs font-medium text-ink-500">{etiqueta}</span>

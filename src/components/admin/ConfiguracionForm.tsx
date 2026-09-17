@@ -494,7 +494,7 @@ function FilaLectura({ etiqueta, valor, placeholder }: { etiqueta: string; valor
 function EncabezadoCampo({ id, etiqueta, valor, maxLength }: { id: string; etiqueta: string; valor: string; maxLength?: number }) {
   return (
     <div className="mb-1 flex items-baseline justify-between gap-2">
-      <label htmlFor={id} className="text-xs font-medium text-ink-900">
+      <label htmlFor={id} className="text-xs font-medium text-ink-500">
         {etiqueta}
       </label>
       {maxLength !== undefined && (

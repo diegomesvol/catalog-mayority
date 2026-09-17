@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useBloqueoScroll } from "@/hooks/useBloqueoScroll";
 import { useCerrarSesion } from "@/hooks/useCerrarSesion";
-import { useCarrito } from "@/components/carrito/CarritoContext";
+import { useCarritoResumen } from "@/components/carrito/CarritoContext";
 import { iniciales } from "@/lib/format";
 import { DescargaOfflineInline } from "./DescargaOfflineInline";
 
@@ -74,7 +74,7 @@ export function MenuMovilCatalogo({ cliente, logoTiendaUrl = null }: Props) {
   const montado = useSyncExternalStore(suscribirNada, () => true, () => false);
   const idPanel = useId();
   const botonRef = useRef<HTMLButtonElement>(null);
-  const { items, abrir: abrirCarrito } = useCarrito();
+  const { items, abrir: abrirCarrito } = useCarritoResumen();
   const cantidadCarrito = items.length;
   // Sin redirectTo: el cliente está en medio del catálogo, así que cerrar
   // sesión solo refresca esta misma página (vuelve a "Ingresar" en el

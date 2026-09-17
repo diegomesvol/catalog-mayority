@@ -256,6 +256,8 @@ function TarjetaColeccionEditor({
   onCancelar: () => void;
 }) {
   const idNombre = useId();
+  const idPortada = useId();
+  const idBase = useId();
   const OPCIONES_POR_CAMPO: Record<keyof FiltroColeccion, string[]> = {
     marca: opciones.marcas,
     categoria: opciones.categorias,
@@ -319,10 +321,11 @@ function TarjetaColeccionEditor({
       </div>
 
       <div className="mt-3">
-        <label className="mb-1 block text-xs font-medium text-ink-500">
+        <label htmlFor={idPortada} className="mb-1 block text-xs font-medium text-ink-500">
           Portada {subiendo && "— subiendo…"}
         </label>
         <input
+          id={idPortada}
           type="file"
           accept="image/png,image/jpeg,image/webp"
           disabled={subiendo}
@@ -347,8 +350,11 @@ function TarjetaColeccionEditor({
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
         {CAMPO_FILTRO.map(({ campo, etiqueta, todas }) => (
           <div key={campo}>
-            <label className="mb-1 block text-[11px] font-medium text-ink-500">{etiqueta}</label>
+            <label htmlFor={`${idBase}-${campo}`} className="mb-1 block text-[11px] font-medium text-ink-500">
+              {etiqueta}
+            </label>
             <select
+              id={`${idBase}-${campo}`}
               value={coleccion.filtro[campo] ?? ""}
               onChange={(e) => onFiltro(campo, e.target.value)}
               className="w-full rounded-lg border border-ink-200 bg-paper-raised px-2 py-1.5 text-xs text-ink-900 focus:border-accent-600"

@@ -54,6 +54,23 @@ interface CarritoContextValor {
 
 const CarritoContext = createContext<CarritoContextValor | null>(null);
 
+// Contexto liviano aparte para "solo el contador + abrir el panel" (el
+// botón del carrito en el header y el ítem del menú mobile, ver
+// useCarritoResumen más abajo): antes CarritoBoton/MenuMovilCatalogo leían
+// del contexto completo con useCarrito(), así que se volvían a renderizar
+// en CADA tecla que el comprador tipeaba en "Tus datos"/"Pago y envío"
+// dentro del carrito abierto (comprador/datosEnvio cambian ahí), aunque a
+// ellos solo les importa items/abrir — hallazgo de rendimiento de la
+// auditoría 2026-09-17. items/abrir siguen viviendo en CarritoContext (una
+// sola fuente de verdad); este contexto solo evita que un cambio en
+// comprador/datosEnvio/perfilCompleto/numeroWhatsApp/clienteLogueado
+// dispare un re-render en esos dos consumidores.
+interface CarritoResumenValor {
+  items: ItemCarrito[];
+  abrir: () => void;
+}
+const CarritoResumenContext = createContext<CarritoResumenValor | null>(null);
+
 function leerDeStorage<T>(clave: string, porDefecto: T): T {
   try {
     const crudo = window.localStorage.getItem(clave);
@@ -331,11 +348,33 @@ export function CarritoProvider({
     ],
   );
 
-  return <CarritoContext.Provider value={valor}>{children}</CarritoContext.Provider>;
+  // Memoizado aparte del "valor" grande de arriba: identidad propia, solo
+  // cambia si items o abrir cambian (abrir es estable, así que en la
+  // práctica solo reacciona a items) — ver la nota de CarritoResumenContext.
+  const valorResumen = useMemo<CarritoResumenValor>(() => ({ items, abrir }), [items, abrir]);
+
+  return (
+    <CarritoContext.Provider value={valor}>
+      <CarritoResumenContext.Provider value={valorResumen}>{children}</CarritoResumenContext.Provider>
+    </CarritoContext.Provider>
+  );
 }
 
 export function useCarrito(): CarritoContextValor {
   const ctx = useContext(CarritoContext);
   if (!ctx) throw new Error("useCarrito debe usarse dentro de <CarritoProvider>.");
+  return ctx;
+}
+
+/**
+ * Versión liviana de useCarrito() para componentes que solo necesitan el
+ * contador de ítems y poder abrir el panel (CarritoBoton, MenuMovilCatalogo)
+ * — no se re-renderizan cuando cambia comprador/datosEnvio/perfilCompleto/
+ * numeroWhatsApp/clienteLogueado, a diferencia de useCarrito(). Ver la nota
+ * en CarritoResumenContext.
+ */
+export function useCarritoResumen(): CarritoResumenValor {
+  const ctx = useContext(CarritoResumenContext);
+  if (!ctx) throw new Error("useCarritoResumen debe usarse dentro de <CarritoProvider>.");
   return ctx;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { formatearPrecio } from "@/lib/format";
+import { formatearFechaHora, formatearPrecio } from "@/lib/format";
 import { ESTADOS_PEDIDO, ESTADO_PEDIDO_ETIQUETA, METODOS_ENVIO_ETIQUETA, METODOS_PAGO_ETIQUETA, type EstadoPedido } from "@/lib/schemas/pedido";
 import { EstadoPedidoBadge } from "@/components/pedidos/EstadoPedidoBadge";
 import type { PedidoFila } from "./PedidosAdmin";
@@ -14,10 +14,6 @@ interface Props {
   onToggleTodos: () => void;
   onVerDetalle: (pedido: PedidoFila) => void;
   onCambiarEstadoRapido: (id: string, estado: EstadoPedido) => void;
-}
-
-function formatearFechaHora(iso: string): string {
-  return new Date(iso).toLocaleString("es-VE", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 // Tabla del módulo de Gestión de Pedidos — bordes limpios, hover, checkboxes

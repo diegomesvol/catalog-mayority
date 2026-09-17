@@ -6,22 +6,11 @@ import { leerCatalogoPublico } from "@/lib/blob";
 import { recalcularPedido } from "@/lib/pedidoServidor";
 import { logError } from "@/lib/logger";
 
-// Historial de pedidos del cliente logueado. RLS (propio_pedido_select) ya
-// limita esto a sus propios pedidos aunque acá se use el cliente normal
-// (no el de servicio) — este chequeo de sesión es la primera barrera, RLS
-// la segunda.
-export async function GET() {
-  const supabase = await crearClienteServidor();
-  const permiso = await requiereClienteActivo(supabase);
-  if (!permiso.ok) return permiso.respuesta;
-
-  const { data, error } = await supabase.from("pedidos").select("*").order("creado_en", { ascending: false });
-  if (error) {
-    logError("api/cliente/pedidos GET", error);
-    return NextResponse.json({ ok: false, mensaje: "No se pudieron leer tus pedidos." }, { status: 500 });
-  }
-  return NextResponse.json({ ok: true, pedidos: data });
-}
+// Sin GET acá a propósito: el historial de pedidos del cliente lo lee
+// directo de Supabase /app/cliente/page.tsx (server component), esta ruta
+// nunca tuvo un fetch del lado del cliente que la llamara — código muerto
+// detectado en la auditoría 2026-09-17 (superficie de API sin usar, menos
+// para mantener y auditar).
 
 // Guarda el pedido que el carrito ya armó y mandó por WhatsApp (ver
 // usePedidoWhatsApp) — se SUMA a ese flujo, no lo reemplaza: si esto falla,

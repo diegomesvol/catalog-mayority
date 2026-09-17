@@ -3,6 +3,7 @@ import { subirImagenLogoMarca } from "@/lib/blob";
 import { logError, pistaBlob } from "@/lib/logger";
 import { crearClienteServidor } from "@/lib/supabase";
 import { requierePermisoEscritura } from "@/lib/auth";
+import { validarImagenSubida } from "@/lib/validacionImagen";
 
 // Calco de /api/admin/config/fondo-login (ver la nota ahí): endpoint aparte
 // del que guarda el JSON completo — sube la imagen, devuelve la URL pública
@@ -18,20 +19,18 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const archivo = formData.get("archivo");
-
-    if (!(archivo instanceof File) || archivo.size === 0) {
+    if (!(archivo instanceof File)) {
       return NextResponse.json({ ok: false, mensaje: "Falta la imagen a subir." }, { status: 400 });
     }
-    if (!TIPOS_IMAGEN_PERMITIDOS.includes(archivo.type)) {
-      return NextResponse.json({ ok: false, mensaje: "El logo debe ser PNG, SVG, JPG o WEBP." }, { status: 400 });
-    }
-    // 2MB — mismo límite que se muestra como indicación en el panel.
-    if (archivo.size > 2 * 1024 * 1024) {
-      return NextResponse.json({ ok: false, mensaje: "El logo no puede superar 2MB." }, { status: 400 });
+
+    // validarImagenSubida chequea tipo + tamaño + firma real de bytes (o
+    // sanea el SVG) — ver lib/validacionImagen.ts.
+    const validacion = await validarImagenSubida(archivo, TIPOS_IMAGEN_PERMITIDOS, "El logo");
+    if (!validacion.ok) {
+      return NextResponse.json({ ok: false, mensaje: validacion.mensaje }, { status: 400 });
     }
 
-    const bytes = await archivo.arrayBuffer();
-    const url = await subirImagenLogoMarca(archivo.name || "logo", bytes, archivo.type);
+    const url = await subirImagenLogoMarca(archivo.name || "logo", validacion.bytes!, validacion.contentType!);
     return NextResponse.json({ ok: true, url });
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);

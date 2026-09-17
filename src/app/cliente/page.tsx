@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { crearClienteServidor } from "@/lib/supabase";
 import { obtenerClienteActivo } from "@/lib/clienteAuth";
-import { formatearPrecio } from "@/lib/format";
+import { formatearFecha, formatearPrecio } from "@/lib/format";
 import type { ItemCarrito } from "@/lib/carrito";
 import { logError } from "@/lib/logger";
 import { EstadoPedidoBadge } from "@/components/pedidos/EstadoPedidoBadge";
@@ -17,10 +17,6 @@ interface Pedido {
   estado: EstadoPedido;
   notas_admin: string | null;
   creado_en: string;
-}
-
-function formatearFecha(iso: string): string {
-  return new Date(iso).toLocaleDateString("es-VE", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 // El proxy (src/proxy.ts) ya garantiza que solo llega acá un cliente activo

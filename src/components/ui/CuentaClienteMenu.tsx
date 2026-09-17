@@ -83,6 +83,11 @@ export function CuentaClienteMenu({ cliente, logoTiendaUrl = null }: Props) {
         aria-haspopup="menu"
         aria-expanded={abierto}
         aria-controls={idMenu}
+        // En mobile (debajo de "sm") el <span> con el nombre se oculta y el
+        // avatar es una foto de Google/logo con alt="" — sin esto el botón
+        // queda con nombre accesible vacío ahí (hallazgo Alto de la
+        // auditoría 2026-09-17).
+        aria-label={`Cuenta de ${cliente.nombre}`}
         className="flex items-center gap-2 rounded-full border border-ink-200 py-1 pl-1 pr-2.5 transition-colors hover:border-ink-900 sm:pr-3.5"
       >
         <AvatarCliente nombre={cliente.nombre} avatarUrl={cliente.avatarUrl} logoTiendaUrl={logoTiendaUrl} />

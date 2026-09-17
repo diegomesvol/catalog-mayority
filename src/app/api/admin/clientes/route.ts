@@ -8,16 +8,28 @@ import { logError } from "@/lib/logger";
 // demo) puede verla, mismo criterio que el resto de las pantallas de
 // solo-lectura del panel.
 export async function GET() {
-  const supabase = await crearClienteServidor();
-  const admin = await obtenerAdminActivo(supabase);
-  if (!admin) return NextResponse.json({ ok: false, mensaje: "No autenticado." }, { status: 401 });
+  try {
+    const supabase = await crearClienteServidor();
+    const admin = await obtenerAdminActivo(supabase);
+    if (!admin) return NextResponse.json({ ok: false, mensaje: "No autenticado." }, { status: 401 });
 
-  const { data, error } = await supabase.from("clientes").select("*").order("creado_en", { ascending: false });
-  if (error) {
-    logError("api/admin/clientes GET", error);
+    // Columnas explícitas (no select("*")): esta lista solo pinta la tabla
+    // de ClientesAdmin.tsx (user_id/nombre/empresa/telefono/rif/email/
+    // activo/creado_en) — direccion/ciudad/metodos_pago/logo_url/etc. son
+    // del perfil del cliente y no hacen falta acá.
+    const { data, error } = await supabase
+      .from("clientes")
+      .select("user_id, nombre, empresa, telefono, rif, email, activo, creado_en")
+      .order("creado_en", { ascending: false });
+    if (error) {
+      logError("api/admin/clientes GET", error);
+      return NextResponse.json({ ok: false, mensaje: "No se pudieron leer los clientes." }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, clientes: data });
+  } catch (err) {
+    logError("api/admin/clientes GET", err);
     return NextResponse.json({ ok: false, mensaje: "No se pudieron leer los clientes." }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, clientes: data });
 }
 
 // Invita a un cliente nuevo: crea la cuenta en Supabase Auth (manda el

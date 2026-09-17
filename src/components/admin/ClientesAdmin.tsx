@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { logError } from "@/lib/logger";
 import { fetchJson } from "@/lib/apiCliente";
 import { invitarClienteSchema } from "@/lib/schemas/cliente";
+import { formatearFecha } from "@/lib/format";
 
 interface Cliente {
   user_id: string;
@@ -19,10 +20,6 @@ interface Cliente {
 
 const VACIO = { email: "", nombre: "", empresa: "", telefono: "", rif: "" };
 type Errores = Partial<Record<keyof typeof VACIO, string>>;
-
-function formatearFecha(iso: string): string {
-  return new Date(iso).toLocaleDateString("es-VE", { day: "2-digit", month: "short", year: "numeric" });
-}
 
 // Lista de clientes con cuenta de mayorista + formulario para invitar uno
 // nuevo (crea la cuenta en Supabase Auth y manda el email de invitación —
@@ -209,7 +206,7 @@ function CampoTexto({
 }) {
   return (
     <div className={className}>
-      <label htmlFor={id} className="mb-1 block text-xs font-medium text-ink-900">
+      <label htmlFor={id} className="mb-1 block text-xs font-medium text-ink-500">
         {etiqueta}
       </label>
       <input

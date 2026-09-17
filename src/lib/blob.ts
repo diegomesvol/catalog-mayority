@@ -567,15 +567,25 @@ export async function subirImagenLogoFooter(nombre: string, bytes: ArrayBuffer, 
   return subirImagenPublica("logos-footer", nombre, bytes, contentType);
 }
 
+// Prefijos que realmente usa subirImagenPublica (ver arriba) — allowlist
+// para eliminarImagenPublica: sin esto, cualquier ruta que reciba una URL
+// del body (ej. api/admin/imagenes/descartar) podía borrar CUALQUIER objeto
+// del bucket público con solo armar una URL con esa forma, incluidas fotos
+// del catálogo o logos de OTRO cliente — no hacía falta ser dueño del
+// archivo, solo estar autenticado como admin operativo. Auditoría
+// 2026-09-17.
+const PREFIJOS_BORRABLES = ["guia-tallas/", "colecciones/", "login/", "logo-marca/", "logos-footer/"];
+
 /**
  * Borra del bucket público el objeto detrás de una URL pública ya subida acá
  * (subirImagenPublica) — para no dejar huérfano el archivo VIEJO cuando se
  * reemplaza o se quita una imagen (logo, fondo de login, portada de
  * colección, etc.) en cualquiera de los paneles de configuración. Best
  * effort a propósito: si la URL no es de nuestro bucket (el admin pegó un
- * link externo a mano) o el borrado falla, no lanza — un blob huérfano es un
- * problema de limpieza de Storage, nunca motivo para hacer fallar un
- * guardado que del lado de la base de datos ya se completó.
+ * link externo a mano), no está en uno de los prefijos que administra este
+ * módulo, o el borrado falla, no lanza — un blob huérfano es un problema de
+ * limpieza de Storage, nunca motivo para hacer fallar un guardado que del
+ * lado de la base de datos ya se completó.
  */
 export async function eliminarImagenPublica(url: string | null | undefined): Promise<void> {
   if (!url) return;
@@ -583,7 +593,7 @@ export async function eliminarImagenPublica(url: string | null | undefined): Pro
   const indice = url.indexOf(marcador);
   if (indice === -1) return;
   const path = url.slice(indice + marcador.length).split("?")[0];
-  if (!path) return;
+  if (!path || path.includes("..") || !PREFIJOS_BORRABLES.some((p) => path.startsWith(p))) return;
   try {
     const supabase = await crearClienteServidor();
     const { error } = await supabase.storage.from(BUCKET_PUBLICO).remove([path]);

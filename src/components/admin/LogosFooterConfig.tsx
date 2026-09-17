@@ -96,6 +96,7 @@ function TarjetaLogoFooter({
   onEliminar: () => void;
 }) {
   const idNombre = useId();
+  const idImagen = useId();
 
   return (
     <div className="rounded-xl border border-ink-200 bg-paper-raised p-3 sm:p-4">
@@ -128,10 +129,11 @@ function TarjetaLogoFooter({
       <div className="mt-3">
         {/* Actualizar / Reemplazar — mismo input sirve para la primera
             carga y para pisar una imagen ya subida. */}
-        <label className="mb-1 block text-xs font-medium text-ink-500">
+        <label htmlFor={idImagen} className="mb-1 block text-xs font-medium text-ink-500">
           {logo.imagenUrl ? "Reemplazar imagen" : "Imagen del logo"} {subiendo && "— subiendo…"}
         </label>
         <input
+          id={idImagen}
           type="file"
           accept="image/png,image/jpeg,image/webp,image/svg+xml"
           disabled={subiendo}

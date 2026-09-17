@@ -4,6 +4,7 @@ import type { GuiaTallas } from "@/lib/types";
 import { logError, pistaBlob } from "@/lib/logger";
 import { crearClienteServidor } from "@/lib/supabase";
 import { requierePermisoEscritura } from "@/lib/auth";
+import { validarImagenSubida } from "@/lib/validacionImagen";
 
 // Guía de tallas: config aparte del catálogo (no cambia con cada carga de
 // Excel — ver la nota en lib/blob.ts). El admin sube una imagen o pega un
@@ -46,14 +47,15 @@ export async function POST(request: NextRequest) {
       // queda ignorado en vez de generar un error confuso por un campo que
       // de todas formas no hacía falta llenar.
       if (archivo instanceof File && archivo.size > 0) {
-        if (!TIPOS_IMAGEN_PERMITIDOS.includes(archivo.type)) {
-          return NextResponse.json(
-            { ok: false, mensaje: `"${campo}": la imagen debe ser PNG, JPG o WEBP.` },
-            { status: 400 },
-          );
+        const validacion = await validarImagenSubida(archivo, TIPOS_IMAGEN_PERMITIDOS, `"${campo}"`);
+        if (!validacion.ok) {
+          return NextResponse.json({ ok: false, mensaje: validacion.mensaje }, { status: 400 });
         }
-        const bytes = await archivo.arrayBuffer();
-        nueva[campo] = await subirImagenGuiaTallas(`${campo}-${archivo.name || "imagen"}`, bytes, archivo.type);
+        nueva[campo] = await subirImagenGuiaTallas(
+          `${campo}-${archivo.name || "imagen"}`,
+          validacion.bytes!,
+          validacion.contentType!,
+        );
       } else if (link) {
         if (!/^https?:\/\//i.test(link)) {
           return NextResponse.json(

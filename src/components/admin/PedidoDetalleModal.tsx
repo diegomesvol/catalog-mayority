@@ -2,7 +2,7 @@
 
 import { useEffect, useId } from "react";
 import { subtotalDelItem, unidadesDelItem } from "@/lib/carrito";
-import { formatearPrecio } from "@/lib/format";
+import { formatearFechaHora, formatearPrecio } from "@/lib/format";
 import { METODOS_ENVIO_ETIQUETA, METODOS_PAGO_ETIQUETA } from "@/lib/schemas/pedido";
 import { EstadoPedidoBadge } from "@/components/pedidos/EstadoPedidoBadge";
 import { ImagenProducto } from "@/components/catalogo/ImagenProducto";
@@ -12,10 +12,6 @@ import type { PedidoFila } from "./PedidosAdmin";
 interface Props {
   pedido: PedidoFila;
   onCerrar: () => void;
-}
-
-function formatearFechaHora(iso: string): string {
-  return new Date(iso).toLocaleString("es-VE", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 // Vista desplegable del detalle de UN pedido — artículos con imagen,
@@ -52,7 +48,7 @@ export function PedidoDetalleModal({ pedido, onCerrar }: Props) {
             <h2 id={idTitulo} className="text-sm font-semibold text-ink-900">
               Pedido #{pedido.id.slice(0, 8).toUpperCase()}
             </h2>
-            <p className="mt-0.5 text-xs text-ink-500">{formatearFechaHora(pedido.creado_en)}</p>
+            <p className="mt-0.5 text-xs text-ink-500">{formatearFechaHora(pedido.creado_en, { mes: "long" })}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <EstadoPedidoBadge estado={pedido.estado} />
@@ -102,21 +98,21 @@ export function PedidoDetalleModal({ pedido, onCerrar }: Props) {
           <section className="mt-4">
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">Facturación</h3>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl border border-ink-200 p-3 text-sm">
-              <div>
+              <div className="min-w-0">
                 <dt className="text-xs text-ink-500">Contacto</dt>
-                <dd className="text-ink-900">{pedido.comprador.nombre}</dd>
+                <dd className="truncate text-ink-900">{pedido.comprador.nombre}</dd>
               </div>
-              <div>
+              <div className="min-w-0">
                 <dt className="text-xs text-ink-500">Empresa</dt>
-                <dd className="text-ink-900">{pedido.comprador.empresa}</dd>
+                <dd className="truncate text-ink-900">{pedido.comprador.empresa}</dd>
               </div>
-              <div>
+              <div className="min-w-0">
                 <dt className="text-xs text-ink-500">RIF</dt>
-                <dd className="text-ink-900">{pedido.comprador.rif}</dd>
+                <dd className="truncate text-ink-900">{pedido.comprador.rif}</dd>
               </div>
-              <div>
+              <div className="min-w-0">
                 <dt className="text-xs text-ink-500">Teléfono</dt>
-                <dd className="text-ink-900">
+                <dd className="truncate text-ink-900">
                   {pedido.comprador.telefono}
                   {pedido.cliente?.telefono_2 ? ` / ${pedido.cliente.telefono_2}` : ""}
                 </dd>

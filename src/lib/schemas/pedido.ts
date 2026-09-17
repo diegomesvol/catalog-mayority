@@ -99,7 +99,13 @@ export type ActualizarPedidoInput = z.infer<typeof actualizarPedidoSchema>;
 // la tabla de pedidos). Sin notasAdmin: una nota en lote no tiene sentido
 // (son pedidos distintos), eso se sigue editando pedido por pedido.
 export const actualizarPedidoBulkSchema = z.object({
-  ids: z.array(z.string().uuid()).min(1, "Seleccioná al menos un pedido."),
+  // Mismo tono que umbralStockSchema/tallaIds en lib/schemas/inventario.ts
+  // ("No hay tallas para actualizar."): en los dos casos la lista viene
+  // vacía por un estado defensivo/imposible de la UI (el botón de acción
+  // masiva solo se muestra con selección > 0), no por algo que el admin
+  // tenga que "hacer" — antes acá sonaba a instrucción ("Seleccioná...")
+  // en vez de describir el problema, inconsistente con el resto del panel.
+  ids: z.array(z.string().uuid()).min(1, "No hay pedidos seleccionados para actualizar."),
   estado: z.enum(ESTADOS_PEDIDO),
 });
 
