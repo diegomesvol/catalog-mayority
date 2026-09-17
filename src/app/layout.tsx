@@ -106,6 +106,16 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                     ? { nombre: clienteActivo.nombre, empresa: clienteActivo.empresa, telefono: clienteActivo.telefono, rif: clienteActivo.rif }
                     : null
                 }
+                perfilEnvioCliente={
+                  clienteActivo
+                    ? {
+                        direccion: clienteActivo.direccion,
+                        ciudad: clienteActivo.ciudad,
+                        estadoUbicacion: clienteActivo.estadoUbicacion,
+                        metodosPago: clienteActivo.metodosPago,
+                      }
+                    : null
+                }
               >
                 {children}
                 <CarritoDrawer />

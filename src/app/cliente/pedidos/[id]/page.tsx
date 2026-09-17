@@ -5,35 +5,24 @@ import { obtenerClienteActivo } from "@/lib/clienteAuth";
 import { formatearPrecio } from "@/lib/format";
 import { subtotalDelItem, unidadesDelItem, type DatosComprador, type ItemCarrito } from "@/lib/carrito";
 import { logError } from "@/lib/logger";
+import { EstadoPedidoBadge } from "@/components/pedidos/EstadoPedidoBadge";
+import { METODOS_ENVIO_ETIQUETA, METODOS_PAGO_ETIQUETA, type EstadoPedido, type MetodoEnvio, type MetodoPago } from "@/lib/schemas/pedido";
 
 export const metadata = { title: "Detalle del pedido" };
 export const dynamic = "force-dynamic";
-
-type Estado = "pendiente" | "confirmado" | "despachado" | "cancelado";
 
 interface Pedido {
   id: string;
   items: ItemCarrito[];
   comprador: DatosComprador;
   total: number;
-  estado: Estado;
+  estado: EstadoPedido;
   notas_admin: string | null;
   creado_en: string;
+  metodo_pago: MetodoPago | null;
+  metodo_envio: MetodoEnvio | null;
+  direccion_envio: string | null;
 }
-
-const ESTADO_ETIQUETA: Record<Estado, string> = {
-  pendiente: "Pendiente",
-  confirmado: "Confirmado",
-  despachado: "Despachado",
-  cancelado: "Cancelado",
-};
-
-const ESTADO_CLASE: Record<Estado, string> = {
-  pendiente: "border-warning-600/30 bg-warning-100 text-warning-600",
-  confirmado: "border-accent-600/30 bg-accent-100 text-accent-600",
-  despachado: "border-success-600/30 bg-success-100 text-success-600",
-  cancelado: "border-danger-600/30 bg-danger-100 text-danger-600",
-};
 
 function formatearFecha(iso: string): string {
   return new Date(iso).toLocaleDateString("es-VE", { day: "2-digit", month: "long", year: "numeric" });
@@ -50,7 +39,7 @@ export default async function PaginaDetallePedidoCliente({ params }: { params: P
 
   const { data: pedido, error } = await supabase
     .from("pedidos")
-    .select("id, items, comprador, total, estado, notas_admin, creado_en")
+    .select("id, items, comprador, total, estado, notas_admin, creado_en, metodo_pago, metodo_envio, direccion_envio")
     .eq("id", id)
     .maybeSingle();
 
@@ -70,9 +59,7 @@ export default async function PaginaDetallePedidoCliente({ params }: { params: P
             <h1 className="text-base font-semibold text-ink-900">Pedido {p.id.slice(0, 8).toUpperCase()}</h1>
             <p className="text-sm text-ink-500">{formatearFecha(p.creado_en)}</p>
           </div>
-          <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium ${ESTADO_CLASE[p.estado]}`}>
-            {ESTADO_ETIQUETA[p.estado]}
-          </span>
+          <EstadoPedidoBadge estado={p.estado} />
         </div>
 
         <a
@@ -138,6 +125,24 @@ export default async function PaginaDetallePedidoCliente({ params }: { params: P
             <div>
               <dt className="text-xs text-ink-500">RIF</dt>
               <dd className="text-ink-900">{p.comprador.rif}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-ink-200 bg-paper-raised p-4 sm:p-5">
+          <h2 className="text-sm font-semibold text-ink-900">Pago y envío</h2>
+          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+            <div>
+              <dt className="text-xs text-ink-500">Método de pago</dt>
+              <dd className="text-ink-900">{p.metodo_pago ? METODOS_PAGO_ETIQUETA[p.metodo_pago] : "No especificado"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-ink-500">Método de envío</dt>
+              <dd className="text-ink-900">{p.metodo_envio ? METODOS_ENVIO_ETIQUETA[p.metodo_envio] : "No especificado"}</dd>
+            </div>
+            <div className="col-span-2">
+              <dt className="text-xs text-ink-500">Dirección de despacho</dt>
+              <dd className="text-ink-900">{p.direccion_envio || "No especificada"}</dd>
             </div>
           </dl>
         </div>

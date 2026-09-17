@@ -51,6 +51,20 @@ export interface DatosComprador {
 
 export const COMPRADOR_VACIO: DatosComprador = { nombre: "", empresa: "", telefono: "", rif: "" };
 
+// Captura de método de pago/envío + dirección de despacho DEL PEDIDO (no del
+// perfil — un pedido puntual puede ir a una dirección o pagarse distinto a
+// lo configurado por defecto). Strings sueltos (no MetodoPago/MetodoEnvio de
+// lib/schemas/pedido.ts) para no crear una dependencia circular entre este
+// archivo (bajo nivel, sin Zod) y ese esquema; "" representa "sin elegir
+// todavía" en los <select> del carrito.
+export interface DatosEnvio {
+  metodoPago: string;
+  metodoEnvio: string;
+  direccionEnvio: string;
+}
+
+export const DATOS_ENVIO_VACIO: DatosEnvio = { metodoPago: "", metodoEnvio: "", direccionEnvio: "" };
+
 export function unidadesDelItem(item: ItemCarrito): number {
   return item.cantidad * item.cantidadPorBulto;
 }

@@ -4,6 +4,8 @@ import { obtenerClienteActivo } from "@/lib/clienteAuth";
 import { formatearPrecio } from "@/lib/format";
 import type { ItemCarrito } from "@/lib/carrito";
 import { logError } from "@/lib/logger";
+import { EstadoPedidoBadge } from "@/components/pedidos/EstadoPedidoBadge";
+import type { EstadoPedido } from "@/lib/schemas/pedido";
 
 export const metadata = { title: "Mis pedidos" };
 export const dynamic = "force-dynamic";
@@ -12,24 +14,10 @@ interface Pedido {
   id: string;
   items: ItemCarrito[];
   total: number;
-  estado: "pendiente" | "confirmado" | "despachado" | "cancelado";
+  estado: EstadoPedido;
   notas_admin: string | null;
   creado_en: string;
 }
-
-const ESTADO_ETIQUETA: Record<Pedido["estado"], string> = {
-  pendiente: "Pendiente",
-  confirmado: "Confirmado",
-  despachado: "Despachado",
-  cancelado: "Cancelado",
-};
-
-const ESTADO_CLASE: Record<Pedido["estado"], string> = {
-  pendiente: "border-warning-600/30 bg-warning-100 text-warning-600",
-  confirmado: "border-accent-600/30 bg-accent-100 text-accent-600",
-  despachado: "border-success-600/30 bg-success-100 text-success-600",
-  cancelado: "border-danger-600/30 bg-danger-100 text-danger-600",
-};
 
 function formatearFecha(iso: string): string {
   return new Date(iso).toLocaleDateString("es-VE", { day: "2-digit", month: "short", year: "numeric" });
@@ -86,11 +74,7 @@ export default async function PaginaCliente() {
                         {pedido.items.length} producto{pedido.items.length === 1 ? "" : "s"}
                       </p>
                     </div>
-                    <span
-                      className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium ${ESTADO_CLASE[pedido.estado]}`}
-                    >
-                      {ESTADO_ETIQUETA[pedido.estado]}
-                    </span>
+                    <EstadoPedidoBadge estado={pedido.estado} />
                   </div>
 
                   <ul className="mt-3 flex flex-col gap-1 border-t border-ink-200 pt-3">

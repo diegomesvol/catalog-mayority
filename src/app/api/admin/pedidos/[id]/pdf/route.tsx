@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { crearClienteServidor } from "@/lib/supabase";
-import { requiereClienteActivo } from "@/lib/clienteAuth";
+import { obtenerAdminActivo } from "@/lib/auth";
 import { NotaEntregaDocumento, type DatosNotaEntrega } from "@/lib/pdf/notaEntregaPdf";
 import { logError } from "@/lib/logger";
 import type { DatosComprador, ItemCarrito } from "@/lib/carrito";
 import type { MetodoEnvio, MetodoPago } from "@/lib/schemas/pedido";
 
-// @react-pdf/renderer usa APIs de Node (fontkit, buffers) — no corre en
-// Edge, por eso el runtime explícito acá (el resto del proyecto no lo
-// necesita porque Node ya es el default de las route handlers de Next).
+// Mismo documento que api/cliente/pedidos/[id]/pdf (ver esa ruta y la nota
+// grande en lib/pdf/notaEntregaPdf.tsx) — acá sin filtrar por cliente_id
+// (cualquier admin activo puede ver/descargar la nota de entrega de
+// CUALQUIER pedido, igual que GET /api/admin/pedidos).
 export const runtime = "nodejs";
 
 interface FilaPedidoConCliente {
@@ -26,15 +27,11 @@ interface FilaPedidoConCliente {
   cliente: { telefono_2: string | null; direccion: string | null; ciudad: string | null; estado_ubicacion: string | null } | null;
 }
 
-// Descarga la Nota de Entrega de UN pedido propio en PDF — RLS
-// (propio_pedido_select) ya garantiza que .eq("id", id) no devuelva nada si
-// el pedido no es de este cliente, así que un 404 acá cubre tanto "no
-// existe" como "no es tuyo" sin distinguir entre los dos casos al cliente.
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await crearClienteServidor();
-  const permiso = await requiereClienteActivo(supabase);
-  if (!permiso.ok) return permiso.respuesta;
+  const admin = await obtenerAdminActivo(supabase);
+  if (!admin) return NextResponse.json({ ok: false, mensaje: "No autenticado." }, { status: 401 });
 
   try {
     const { data, error } = await supabase
@@ -46,7 +43,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       .maybeSingle();
 
     if (error) {
-      logError("api/cliente/pedidos/[id]/pdf GET", error);
+      logError("api/admin/pedidos/[id]/pdf GET", error);
       return NextResponse.json({ ok: false, mensaje: "No se pudo generar el PDF." }, { status: 500 });
     }
     if (!data) {
@@ -79,12 +76,12 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="nota-entrega-${pedido.id.slice(0, 8)}.pdf"`,
+        "Content-Disposition": `inline; filename="nota-entrega-${pedido.id.slice(0, 8)}.pdf"`,
         "Cache-Control": "private, no-store",
       },
     });
   } catch (err) {
-    logError("api/cliente/pedidos/[id]/pdf GET", err);
+    logError("api/admin/pedidos/[id]/pdf GET", err);
     return NextResponse.json({ ok: false, mensaje: "No se pudo generar el PDF." }, { status: 500 });
   }
 }

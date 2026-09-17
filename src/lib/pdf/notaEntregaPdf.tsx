@@ -6,31 +6,30 @@
 import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 import { formatearPrecio } from "@/lib/format";
 import { subtotalDelItem, unidadesDelItem, type DatosComprador, type ItemCarrito } from "@/lib/carrito";
+import { ESTADO_PEDIDO_ETIQUETA, METODOS_ENVIO_ETIQUETA, METODOS_PAGO_ETIQUETA, type EstadoPedido, type MetodoEnvio, type MetodoPago } from "@/lib/schemas/pedido";
 
 export interface DatosNotaEntrega {
   id: string;
   creadoEn: string;
-  estado: "pendiente" | "confirmado" | "despachado" | "cancelado";
+  estado: EstadoPedido;
   items: ItemCarrito[];
   comprador: DatosComprador;
   total: number;
   notasAdmin: string | null;
+  // Captura del pedido (ver migración 20260916020000_...) — null en pedidos
+  // hechos antes de que existiera este campo.
+  metodoPago: MetodoPago | null;
+  metodoEnvio: MetodoEnvio | null;
+  direccionEnvio: string | null;
   // Datos de envío tomados del perfil del cliente al momento de generar el
-  // PDF (no del snapshot `comprador`, que solo trae nombre/empresa/
-  // teléfono/RIF — ver lib/schemas/pedido.ts) — puede venir null si el
-  // cliente todavía no los había completado cuando hizo este pedido.
+  // PDF — respaldo cuando el pedido no tiene su propia direccionEnvio (ver
+  // arriba). Puede venir null si el cliente todavía no los había
+  // completado cuando hizo este pedido.
   telefono2: string | null;
   direccion: string | null;
   ciudad: string | null;
   estadoUbicacion: string | null;
 }
-
-const ESTADO_ETIQUETA: Record<DatosNotaEntrega["estado"], string> = {
-  pendiente: "Pendiente",
-  confirmado: "Confirmado",
-  despachado: "Despachado",
-  cancelado: "Cancelado",
-};
 
 const estilos = StyleSheet.create({
   page: { padding: 32, fontSize: 9, fontFamily: "Helvetica", color: "#1c1a17" },
@@ -72,7 +71,7 @@ export function NotaEntregaDocumento({ pedido }: { pedido: DatosNotaEntrega }) {
             <Text style={estilos.tituloDocumento}>NOTA DE ENTREGA</Text>
             <Text style={estilos.meta}>N.° {numero}</Text>
             <Text style={estilos.meta}>{fecha}</Text>
-            <Text style={estilos.meta}>Estado: {ESTADO_ETIQUETA[pedido.estado]}</Text>
+            <Text style={estilos.meta}>Estado: {ESTADO_PEDIDO_ETIQUETA[pedido.estado]}</Text>
           </View>
         </View>
 
@@ -96,12 +95,22 @@ export function NotaEntregaDocumento({ pedido }: { pedido: DatosNotaEntrega }) {
               {pedido.comprador.telefono}
               {pedido.telefono2 ? ` / ${pedido.telefono2}` : ""}
             </Text>
-            {(pedido.direccion || pedido.ciudad) && (
+            {/* La dirección propia del pedido manda; si no la tiene (pedidos
+                de antes de esta captura) se cae a la del perfil. */}
+            {(pedido.direccionEnvio || pedido.direccion || pedido.ciudad) && (
               <Text style={estilos.dato}>
                 <Text style={estilos.datoEtiqueta}>Envío: </Text>
-                {[pedido.direccion, pedido.ciudad, pedido.estadoUbicacion].filter(Boolean).join(", ")}
+                {pedido.direccionEnvio || [pedido.direccion, pedido.ciudad, pedido.estadoUbicacion].filter(Boolean).join(", ")}
               </Text>
             )}
+            <Text style={estilos.dato}>
+              <Text style={estilos.datoEtiqueta}>Método de pago: </Text>
+              {pedido.metodoPago ? METODOS_PAGO_ETIQUETA[pedido.metodoPago] : "No especificado"}
+            </Text>
+            <Text style={estilos.dato}>
+              <Text style={estilos.datoEtiqueta}>Método de envío: </Text>
+              {pedido.metodoEnvio ? METODOS_ENVIO_ETIQUETA[pedido.metodoEnvio] : "No especificado"}
+            </Text>
           </View>
         </View>
 

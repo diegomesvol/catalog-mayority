@@ -82,6 +82,12 @@ export async function POST(request: NextRequest) {
           rif: permiso.perfil.rif,
         },
         total: recalculo.total,
+        // Captura del pedido (ver migración 20260916020000_...) — null si el
+        // front no los mandó (ej. el guardado silencioso de "Enviar por
+        // WhatsApp" sin completarlos, ver usePedidoWhatsApp.persistirPedido).
+        metodo_pago: parsed.data.metodoPago ?? null,
+        metodo_envio: parsed.data.metodoEnvio ?? null,
+        direccion_envio: parsed.data.direccionEnvio ?? null,
       })
       .select()
       .single();

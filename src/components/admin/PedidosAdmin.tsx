@@ -1,53 +1,74 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { logError } from "@/lib/logger";
 import { fetchJson } from "@/lib/apiCliente";
-import { formatearPrecio } from "@/lib/format";
-import type { ItemCarrito } from "@/lib/carrito";
+import { exportarPedidosExcel } from "@/lib/pedidosExportar";
+import type { DatosComprador, ItemCarrito } from "@/lib/carrito";
+import type { EstadoPedido, MetodoEnvio, MetodoPago } from "@/lib/schemas/pedido";
+import { PedidosFiltrosBarra } from "./PedidosFiltrosBarra";
+import { PedidosBulkBarra } from "./PedidosBulkBarra";
+import { PedidosTabla } from "./PedidosTabla";
+import { PedidoDetalleModal } from "./PedidoDetalleModal";
 
-type Estado = "pendiente" | "confirmado" | "despachado" | "cancelado";
+// Módulo de Gestión de Pedidos (/admin/pedidos) — mismo diseño (Tailwind +
+// tokens del proyecto, "estilo HeroUI" sin instalar la librería) y misma
+// arquitectura que el Panel de Inventario: todo el filtrado/orden/paginado
+// es sobre los pedidos ya cargados en el cliente (un solo GET a
+// /api/admin/pedidos), ver la nota grande en InventarioAdmin.tsx sobre por
+// qué. Reemplaza la versión anterior (lista simple expandible por fila).
+const TAMANOS_PAGINA = [10, 20, 50] as const;
 
-interface Pedido {
+export interface PedidoFila {
   id: string;
   items: ItemCarrito[];
+  comprador: DatosComprador;
   total: number;
-  estado: Estado;
+  estado: EstadoPedido;
   notas_admin: string | null;
   creado_en: string;
-  cliente: { nombre: string; empresa: string; telefono: string; email: string } | null;
+  metodo_pago: MetodoPago | null;
+  metodo_envio: MetodoEnvio | null;
+  direccion_envio: string | null;
+  cliente: {
+    nombre: string;
+    empresa: string;
+    telefono: string;
+    email: string;
+    rif: string;
+    direccion: string | null;
+    ciudad: string | null;
+    estado_ubicacion: string | null;
+    telefono_2: string | null;
+  } | null;
 }
 
-const ESTADOS: Estado[] = ["pendiente", "confirmado", "despachado", "cancelado"];
-
-const ESTADO_ETIQUETA: Record<Estado, string> = {
-  pendiente: "Pendiente",
-  confirmado: "Confirmado",
-  despachado: "Despachado",
-  cancelado: "Cancelado",
-};
-
-function formatearFecha(iso: string): string {
-  return new Date(iso).toLocaleDateString("es-VE", { day: "2-digit", month: "short", year: "numeric" });
+function coincideBusqueda(p: PedidoFila, texto: string): boolean {
+  if (!texto) return true;
+  const campo = `${p.id} ${p.comprador.nombre} ${p.comprador.empresa} ${p.comprador.rif} ${p.cliente?.rif ?? ""} ${p.cliente?.email ?? ""}`.toLowerCase();
+  return campo.includes(texto.toLowerCase());
 }
 
-// Lista de todos los pedidos (de todos los clientes) con seguimiento de
-// estado + notas — cada fila guarda solo cuando se toca "Guardar" (no en
-// cada tecla), para no mandar un PATCH por cada carácter escrito en notas.
 export function PedidosAdmin() {
-  const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [pedidos, setPedidos] = useState<PedidoFila[]>([]);
   const [cargando, setCargando] = useState(true);
-  const [expandido, setExpandido] = useState<string | null>(null);
-  const [borrador, setBorrador] = useState<Record<string, { estado: Estado; notas: string }>>({});
-  const [guardandoId, setGuardandoId] = useState<string | null>(null);
 
-  // mostrarCargando=false en el efecto de montaje — ver la misma nota en
-  // ClientesAdmin.cargar (evita el warning "set-state-in-effect").
+  const [busqueda, setBusqueda] = useState("");
+  const [estadoFiltro, setEstadoFiltro] = useState<EstadoPedido | "">("");
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
+  const [pagina, setPagina] = useState(1);
+  const [filasPorPagina, setFilasPorPagina] = useState<number>(20);
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+  const [pedidoDetalle, setPedidoDetalle] = useState<PedidoFila | null>(null);
+  const [cambiandoEstadoId, setCambiandoEstadoId] = useState<string | null>(null);
+  const [aplicandoBulk, setAplicandoBulk] = useState(false);
+
   async function cargar(mostrarCargando = true) {
     if (mostrarCargando) setCargando(true);
     try {
-      const { resp, data } = await fetchJson<{ ok: boolean; pedidos?: Pedido[]; mensaje?: string }>("/api/admin/pedidos");
+      const { resp, data } = await fetchJson<{ ok: boolean; pedidos?: PedidoFila[]; mensaje?: string }>("/api/admin/pedidos");
       if (!resp.ok || !data?.ok || !data.pedidos) throw new Error(data?.mensaje ?? "No se pudieron leer los pedidos.");
       setPedidos(data.pedidos);
     } catch (err) {
@@ -59,8 +80,8 @@ export function PedidosAdmin() {
   }
 
   useEffect(() => {
-    // Ver la nota equivalente en ClientesAdmin — difiere la llamada un
-    // microtask para evitar el warning set-state-in-effect.
+    // Ver la nota equivalente en ClientesAdmin/InventarioAdmin — difiere la
+    // llamada un microtask para evitar el warning set-state-in-effect.
     async function iniciar() {
       await Promise.resolve();
       await cargar(false);
@@ -68,13 +89,8 @@ export function PedidosAdmin() {
     iniciar();
   }, []);
 
-  // Refresco simple (no tiempo real): al volver a esta pestaña (ej. el
-  // admin la dejó abierta y atendió otra cosa) se releen los pedidos solos,
-  // sin que tenga que acordarse de recargar la página a mano.
-  // "visibilitychange" en vez de "focus" — no dispara con clicks dentro de
-  // la misma ventana (ej. abrir un <select>), solo al volver de otra pestaña
-  // o app. mostrarCargando=false: no tiene sentido tapar la lista ya
-  // cargada con un skeleton por un refresco de fondo.
+  // Refresco simple (no tiempo real) al volver a la pestaña — mismo patrón
+  // que la versión anterior de este componente.
   useEffect(() => {
     function alVolver() {
       if (document.visibilityState === "visible") void cargar(false);
@@ -83,143 +99,213 @@ export function PedidosAdmin() {
     return () => document.removeEventListener("visibilitychange", alVolver);
   }, []);
 
-  function empezarEdicion(p: Pedido) {
-    setBorrador({ ...borrador, [p.id]: { estado: p.estado, notas: p.notas_admin ?? "" } });
-    setExpandido(expandido === p.id ? null : p.id);
+  const filas: PedidoFila[] = useMemo(() => {
+    const desdeMs = fechaDesde ? new Date(`${fechaDesde}T00:00:00`).getTime() : null;
+    const hastaMs = fechaHasta ? new Date(`${fechaHasta}T23:59:59.999`).getTime() : null;
+    return pedidos
+      .filter((p) => coincideBusqueda(p, busqueda))
+      .filter((p) => !estadoFiltro || p.estado === estadoFiltro)
+      .filter((p) => {
+        const t = new Date(p.creado_en).getTime();
+        if (desdeMs !== null && t < desdeMs) return false;
+        if (hastaMs !== null && t > hastaMs) return false;
+        return true;
+      });
+  }, [pedidos, busqueda, estadoFiltro, fechaDesde, fechaHasta]);
+
+  const totalPaginas = Math.max(1, Math.ceil(filas.length / filasPorPagina));
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const filasPaginadas = useMemo(
+    () => filas.slice((paginaActual - 1) * filasPorPagina, paginaActual * filasPorPagina),
+    [filas, paginaActual, filasPorPagina],
+  );
+
+  function reiniciarPagina() {
+    setPagina(1);
   }
 
-  async function guardar(id: string) {
-    const cambios = borrador[id];
-    if (!cambios) return;
-    setGuardandoId(id);
+  function toggleTodos() {
+    setSeleccionados((prev) => {
+      const idsPagina = filasPaginadas.map((f) => f.id);
+      const todosActivos = idsPagina.every((id) => prev.has(id));
+      const siguiente = new Set(prev);
+      for (const id of idsPagina) (todosActivos ? siguiente.delete(id) : siguiente.add(id));
+      return siguiente;
+    });
+  }
+
+  function toggleFila(id: string) {
+    setSeleccionados((prev) => {
+      const siguiente = new Set(prev);
+      if (siguiente.has(id)) siguiente.delete(id);
+      else siguiente.add(id);
+      return siguiente;
+    });
+  }
+
+  async function cambiarEstadoRapido(id: string, estado: EstadoPedido) {
+    setCambiandoEstadoId(id);
     try {
-      const { resp, data } = await fetchJson<{ ok: boolean; pedido?: Pedido; mensaje?: string }>(`/api/admin/pedidos/${id}`, {
+      const { resp, data } = await fetchJson<{ ok: boolean; mensaje?: string }>(`/api/admin/pedidos/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ estado: cambios.estado, notasAdmin: cambios.notas.trim() || undefined }),
+        body: JSON.stringify({ estado }),
       });
       if (!resp.ok || !data?.ok) {
         toast.error(data?.mensaje ?? "No se pudo actualizar el pedido.");
         return;
       }
-      toast.success("Pedido actualizado.");
-      setExpandido(null);
-      await cargar();
+      setPedidos((prev) => prev.map((p) => (p.id === id ? { ...p, estado } : p)));
+      toast.success("Estado actualizado.");
     } catch (err) {
-      logError("PedidosAdmin.guardar", err, "No se pudo conectar con el servidor — revisá tu conexión a internet y probá de nuevo.");
+      logError("PedidosAdmin.cambiarEstadoRapido", err, "No se pudo conectar con el servidor — revisá tu conexión a internet y probá de nuevo.");
       toast.error("No se pudo conectar con el servidor.");
     } finally {
-      setGuardandoId(null);
+      setCambiandoEstadoId(null);
     }
   }
 
+  async function cambiarEstadoEnLote(estado: EstadoPedido) {
+    const ids = Array.from(seleccionados);
+    if (ids.length === 0) return;
+    setAplicandoBulk(true);
+    try {
+      const { resp, data } = await fetchJson<{ ok: boolean; mensaje?: string; actualizados?: number }>("/api/admin/pedidos/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, estado }),
+      });
+      if (!resp.ok || !data?.ok) {
+        toast.error(data?.mensaje ?? "No se pudo actualizar el estado de los pedidos seleccionados.");
+        return;
+      }
+      setPedidos((prev) => prev.map((p) => (seleccionados.has(p.id) ? { ...p, estado } : p)));
+      toast.success(`${data.actualizados ?? ids.length} pedido${ids.length === 1 ? "" : "s"} actualizado${ids.length === 1 ? "" : "s"}.`);
+      setSeleccionados(new Set());
+    } catch (err) {
+      logError("PedidosAdmin.cambiarEstadoEnLote", err, "No se pudo conectar con el servidor — revisá tu conexión a internet y probá de nuevo.");
+      toast.error("No se pudo conectar con el servidor.");
+    } finally {
+      setAplicandoBulk(false);
+    }
+  }
+
+  function exportarTodo() {
+    exportarPedidosExcel(filas, "pedidos.xlsx");
+  }
+
+  function exportarSeleccion() {
+    exportarPedidosExcel(
+      pedidos.filter((p) => seleccionados.has(p.id)),
+      "pedidos-seleccion.xlsx",
+    );
+  }
+
   return (
-    <div className="rounded-2xl border border-ink-200 p-4 sm:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-ink-900">Pedidos</h2>
-          <p className="mt-1 text-xs text-ink-500">Pedidos guardados por clientes con cuenta propia — seguimiento de estado.</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => cargar()}
-          disabled={cargando}
-          className="flex shrink-0 items-center gap-1.5 rounded-full border border-ink-200 px-3 py-1.5 text-xs font-medium text-ink-700 transition-colors hover:bg-ink-100 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v6h-6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Actualizar
-        </button>
-      </div>
+    <div className="flex min-w-0 flex-col gap-5">
+      <PedidosFiltrosBarra
+        busqueda={busqueda}
+        onBusqueda={(v) => {
+          setBusqueda(v);
+          reiniciarPagina();
+        }}
+        estado={estadoFiltro}
+        onEstado={(v) => {
+          setEstadoFiltro(v);
+          reiniciarPagina();
+        }}
+        fechaDesde={fechaDesde}
+        onFechaDesde={(v) => {
+          setFechaDesde(v);
+          reiniciarPagina();
+        }}
+        fechaHasta={fechaHasta}
+        onFechaHasta={(v) => {
+          setFechaHasta(v);
+          reiniciarPagina();
+        }}
+        onExportarTodo={exportarTodo}
+      />
+
+      <PedidosBulkBarra
+        cantidad={seleccionados.size}
+        aplicando={aplicandoBulk}
+        onCambiarEstado={cambiarEstadoEnLote}
+        onExportar={exportarSeleccion}
+        onCancelar={() => setSeleccionados(new Set())}
+      />
 
       {cargando ? (
-        <div className="mt-4 space-y-2" aria-label="Cargando pedidos" role="status">
+        <div className="flex flex-col gap-2" aria-label="Cargando pedidos" role="status">
+          <div className="skeleton h-14 rounded-lg" />
           <div className="skeleton h-14 rounded-lg" />
           <div className="skeleton h-14 rounded-lg" />
         </div>
-      ) : pedidos.length === 0 ? (
-        <p className="mt-4 text-xs text-ink-500">Todavía no hay pedidos registrados.</p>
+      ) : filas.length === 0 ? (
+        <p className="rounded-xl border border-ink-200 bg-paper-raised p-6 text-center text-sm text-ink-500">
+          {pedidos.length === 0 ? "Todavía no hay pedidos registrados." : "Ningún pedido coincide con la búsqueda o los filtros actuales."}
+        </p>
       ) : (
-        <ul className="mt-4 flex flex-col divide-y divide-ink-200">
-          {pedidos.map((p) => {
-            const abierto = expandido === p.id;
-            const edicion = borrador[p.id];
-            return (
-              <li key={p.id} className="py-3">
+        <>
+          <PedidosTabla
+            filas={filasPaginadas}
+            seleccionados={seleccionados}
+            todosSeleccionados={filasPaginadas.length > 0 && filasPaginadas.every((f) => seleccionados.has(f.id))}
+            cambiandoEstadoId={cambiandoEstadoId}
+            onToggleFila={toggleFila}
+            onToggleTodos={toggleTodos}
+            onVerDetalle={setPedidoDetalle}
+            onCambiarEstadoRapido={cambiarEstadoRapido}
+          />
+
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-ink-500">
+            <div className="flex items-center gap-2">
+              <span>Filas por página</span>
+              <select
+                value={filasPorPagina}
+                onChange={(e) => {
+                  setFilasPorPagina(Number(e.target.value));
+                  reiniciarPagina();
+                }}
+                className="rounded-lg border border-ink-200 bg-paper-raised px-2 py-1 text-xs text-ink-900 focus:border-accent-600"
+              >
+                {TAMANOS_PAGINA.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+              <span>· {filas.length} pedidos en total</span>
+            </div>
+
+            {totalPaginas > 1 && (
+              <nav className="flex items-center gap-3" aria-label="Paginado de pedidos">
                 <button
                   type="button"
-                  onClick={() => empezarEdicion(p)}
-                  className="-mx-2 flex w-[calc(100%+1rem)] flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-lg px-2 py-1 text-left text-sm transition-colors hover:bg-ink-100"
+                  disabled={paginaActual <= 1}
+                  onClick={() => setPagina(paginaActual - 1)}
+                  className="rounded-full border border-ink-200 px-3 py-1.5 font-medium text-ink-900 transition-colors hover:border-ink-900 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <div className="flex flex-col">
-                    <span className="text-ink-900">{p.cliente ? `${p.cliente.nombre} — ${p.cliente.empresa}` : "Cliente eliminado"}</span>
-                    <span className="text-xs text-ink-500">
-                      {formatearFecha(p.creado_en)} · {p.items.length} producto{p.items.length === 1 ? "" : "s"} · {formatearPrecio(p.total)}
-                    </span>
-                  </div>
-                  <span className="shrink-0 rounded-full border border-ink-200 px-2.5 py-0.5 text-xs font-medium text-ink-700">
-                    {ESTADO_ETIQUETA[p.estado]}
-                  </span>
+                  Anterior
                 </button>
-
-                {abierto && edicion && (
-                  <div className="mt-3 flex flex-col gap-3 rounded-xl bg-paper p-3">
-                    <div>
-                      <label htmlFor={`estado-${p.id}`} className="mb-1 block text-xs font-medium text-ink-900">
-                        Estado
-                      </label>
-                      <select
-                        id={`estado-${p.id}`}
-                        value={edicion.estado}
-                        onChange={(e) => setBorrador({ ...borrador, [p.id]: { ...edicion, estado: e.target.value as Estado } })}
-                        className="w-full rounded-lg border border-ink-200 bg-paper-raised px-3 py-2 text-sm text-ink-900 focus:border-accent-600"
-                      >
-                        {ESTADOS.map((e) => (
-                          <option key={e} value={e}>
-                            {ESTADO_ETIQUETA[e]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label htmlFor={`notas-${p.id}`} className="mb-1 block text-xs font-medium text-ink-900">
-                        Notas (visibles para el cliente)
-                      </label>
-                      <textarea
-                        id={`notas-${p.id}`}
-                        value={edicion.notas}
-                        onChange={(e) => setBorrador({ ...borrador, [p.id]: { ...edicion, notas: e.target.value } })}
-                        rows={2}
-                        maxLength={500}
-                        className="w-full resize-none rounded-lg border border-ink-200 bg-paper-raised px-3 py-2 text-sm text-ink-900 focus:border-accent-600"
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => guardar(p.id)}
-                        disabled={guardandoId === p.id}
-                        className="rounded-full bg-ink-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {guardandoId === p.id ? "Guardando…" : "Guardar"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setExpandido(null)}
-                        disabled={guardandoId === p.id}
-                        className="rounded-full px-4 py-2 text-sm font-medium text-ink-500 transition-colors hover:text-ink-900 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                <span>
+                  {paginaActual} / {totalPaginas}
+                </span>
+                <button
+                  type="button"
+                  disabled={paginaActual >= totalPaginas}
+                  onClick={() => setPagina(paginaActual + 1)}
+                  className="rounded-full border border-ink-200 px-3 py-1.5 font-medium text-ink-900 transition-colors hover:border-ink-900 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Siguiente
+                </button>
+              </nav>
+            )}
+          </div>
+        </>
       )}
+
+      {pedidoDetalle && <PedidoDetalleModal pedido={pedidoDetalle} onCerrar={() => setPedidoDetalle(null)} />}
     </div>
   );
 }

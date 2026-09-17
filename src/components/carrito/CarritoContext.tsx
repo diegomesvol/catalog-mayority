@@ -2,11 +2,12 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { COMPRADOR_VACIO, numeroWhatsAppVentas, type DatosComprador, type ItemCarrito } from "@/lib/carrito";
+import { COMPRADOR_VACIO, DATOS_ENVIO_VACIO, numeroWhatsAppVentas, type DatosComprador, type DatosEnvio, type ItemCarrito } from "@/lib/carrito";
 import { logError } from "@/lib/logger";
 
 const CLAVE_CARRITO = "mesvol-carrito-v1";
 const CLAVE_COMPRADOR = "mesvol-comprador-v1";
+const CLAVE_ENVIO = "mesvol-envio-v1";
 
 interface OpcionesAgregarItem {
   // false para agregar "de paso" (ej. botón rápido en la tarjeta del
@@ -36,11 +37,17 @@ interface CarritoContextValor {
   // aplica) o cuando falta completar el onboarding. Lo usa el botón
   // "Realizar pedido" del carrito para bloquear con shake+toast.
   perfilCompleto: boolean;
+  // Método de pago/envío + dirección de despacho DEL PEDIDO — separado de
+  // "comprador" (identidad) porque es un dato logístico, no de facturación.
+  // Precargado desde el perfil al iniciar sesión (ver perfilEnvioCliente) y
+  // editable en el carrito.
+  datosEnvio: DatosEnvio;
   agregarItem: (item: Omit<ItemCarrito, "cantidad">, cantidad: number, opciones?: OpcionesAgregarItem) => void;
   actualizarCantidad: (itemId: string, cantidad: number) => void;
   quitarItem: (itemId: string) => void;
   vaciar: () => void;
   setComprador: (comprador: DatosComprador) => void;
+  setDatosEnvio: (datosEnvio: DatosEnvio) => void;
   abrir: () => void;
   cerrar: () => void;
 }
@@ -71,15 +78,29 @@ interface Props {
   // Datos del perfil del cliente logueado (los define el admin al invitar):
   // precargan "Tus datos" del carrito. null sin sesión de cliente.
   datosCliente: DatosComprador | null;
+  // Método de pago / dirección de despacho ya guardados en el perfil (ver
+  // clientes.metodos_pago/direccion/ciudad/estado_ubicacion) — precargan
+  // datosEnvio al iniciar sesión, editable después. metodoEnvio no tiene
+  // equivalente en el perfil (es un dato nuevo, solo existe por pedido), así
+  // que no se precarga. null sin sesión de cliente.
+  perfilEnvioCliente: { direccion: string | null; ciudad: string | null; estadoUbicacion: string | null; metodosPago: string[] } | null;
 }
 
-export function CarritoProvider({ children, numeroWhatsApp: numeroConfigurado, clienteLogueado, perfilCompleto, datosCliente }: Props) {
+export function CarritoProvider({
+  children,
+  numeroWhatsApp: numeroConfigurado,
+  clienteLogueado,
+  perfilCompleto,
+  datosCliente,
+  perfilEnvioCliente,
+}: Props) {
   // Arranca vacío en el server y en el primer render del cliente (evita
   // desajustes de hidratación); el contenido real de localStorage se carga
   // recién en el useEffect, que solo corre en el navegador.
   const [hidratado, setHidratado] = useState(false);
   const [items, setItems] = useState<ItemCarrito[]>([]);
   const [comprador, setCompradorState] = useState<DatosComprador>(COMPRADOR_VACIO);
+  const [datosEnvio, setDatosEnvioState] = useState<DatosEnvio>(DATOS_ENVIO_VACIO);
   const [abierto, setAbierto] = useState(false);
 
   useEffect(() => {
@@ -92,6 +113,7 @@ export function CarritoProvider({ children, numeroWhatsApp: numeroConfigurado, c
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setItems(leerDeStorage(CLAVE_CARRITO, []));
     setCompradorState(leerDeStorage(CLAVE_COMPRADOR, COMPRADOR_VACIO));
+    setDatosEnvioState(leerDeStorage(CLAVE_ENVIO, DATOS_ENVIO_VACIO));
     setHidratado(true);
   }, []);
 
@@ -104,16 +126,44 @@ export function CarritoProvider({ children, numeroWhatsApp: numeroConfigurado, c
   const empresaCliente = datosCliente?.empresa;
   const telefonoCliente = datosCliente?.telefono;
   const rifCliente = datosCliente?.rif;
+  const direccionCliente = perfilEnvioCliente?.direccion;
+  const ciudadCliente = perfilEnvioCliente?.ciudad;
+  const estadoUbicacionCliente = perfilEnvioCliente?.estadoUbicacion;
+  const metodoPagoPorDefecto = perfilEnvioCliente?.metodosPago[0];
   useEffect(() => {
     if (!hidratado) return;
+    // Capturado ANTES de actualizar el ref (más abajo): distingue "recién
+    // inició sesión" de "ya estaba logueado y cambió algo del perfil", para
+    // precargar datosEnvio una sola vez y no pisar lo que el cliente ya haya
+    // tocado a mano en el carrito durante la sesión.
+    const veniaDeslogueado = !clienteAnterior.current;
     if (clienteLogueado && nombreCliente !== undefined) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- sincroniza con la sesión resuelta en el servidor
       setCompradorState({ nombre: nombreCliente, empresa: empresaCliente ?? "", telefono: telefonoCliente ?? "", rif: rifCliente ?? "" });
+      if (veniaDeslogueado) {
+        setDatosEnvioState((prev) => ({
+          metodoPago: prev.metodoPago || metodoPagoPorDefecto || "",
+          metodoEnvio: prev.metodoEnvio,
+          direccionEnvio: prev.direccionEnvio || [direccionCliente, ciudadCliente, estadoUbicacionCliente].filter(Boolean).join(", "),
+        }));
+      }
     } else if (clienteAnterior.current && !clienteLogueado) {
       setCompradorState(COMPRADOR_VACIO);
+      setDatosEnvioState(DATOS_ENVIO_VACIO);
     }
     clienteAnterior.current = clienteLogueado;
-  }, [hidratado, clienteLogueado, nombreCliente, empresaCliente, telefonoCliente, rifCliente]);
+  }, [
+    hidratado,
+    clienteLogueado,
+    nombreCliente,
+    empresaCliente,
+    telefonoCliente,
+    rifCliente,
+    metodoPagoPorDefecto,
+    direccionCliente,
+    ciudadCliente,
+    estadoUbicacionCliente,
+  ]);
 
   useEffect(() => {
     if (!hidratado) return;
@@ -132,6 +182,15 @@ export function CarritoProvider({ children, numeroWhatsApp: numeroConfigurado, c
       logError("CarritoContext (guardar comprador)", err, "No se pudieron guardar los datos del comprador en este navegador.");
     }
   }, [comprador, hidratado]);
+
+  useEffect(() => {
+    if (!hidratado) return;
+    try {
+      window.localStorage.setItem(CLAVE_ENVIO, JSON.stringify(datosEnvio));
+    } catch (err) {
+      logError("CarritoContext (guardar envío)", err, "No se pudieron guardar los datos de envío en este navegador.");
+    }
+  }, [datosEnvio, hidratado]);
 
   const agregarItem = useCallback((item: Omit<ItemCarrito, "cantidad">, cantidad: number, opciones?: OpcionesAgregarItem) => {
     setItems((prev) => {
@@ -245,15 +304,31 @@ export function CarritoProvider({ children, numeroWhatsApp: numeroConfigurado, c
       numeroWhatsApp,
       clienteLogueado,
       perfilCompleto,
+      datosEnvio,
       agregarItem,
       actualizarCantidad,
       quitarItem,
       vaciar,
       setComprador: setCompradorState,
+      setDatosEnvio: setDatosEnvioState,
       abrir,
       cerrar,
     }),
-    [items, comprador, abierto, numeroWhatsApp, clienteLogueado, perfilCompleto, agregarItem, actualizarCantidad, quitarItem, vaciar, abrir, cerrar],
+    [
+      items,
+      comprador,
+      datosEnvio,
+      abierto,
+      numeroWhatsApp,
+      clienteLogueado,
+      perfilCompleto,
+      agregarItem,
+      actualizarCantidad,
+      quitarItem,
+      vaciar,
+      abrir,
+      cerrar,
+    ],
   );
 
   return <CarritoContext.Provider value={valor}>{children}</CarritoContext.Provider>;

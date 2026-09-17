@@ -6,6 +6,7 @@ import { useCarrito } from "./CarritoContext";
 import { subtotalDelItem, totalCarrito, unidadesDelItem, type ItemCarrito } from "@/lib/carrito";
 import { formatearPrecio } from "@/lib/format";
 import { usePedidoWhatsApp } from "@/hooks/usePedidoWhatsApp";
+import { METODOS_ENVIO_ETIQUETA, METODOS_ENVIO_OPCIONES, METODOS_PAGO_ETIQUETA, METODOS_PAGO_OPCIONES } from "@/lib/schemas/pedido";
 
 // Mismo patrón de confirmación por toast que ColeccionesConfig.tsx
 // (confirmarEliminar) — al agrandar el botón de vaciar para que sea más
@@ -21,18 +22,33 @@ function confirmarVaciar(alConfirmar: () => void) {
 }
 
 export function CarritoDrawer() {
-  const { items, comprador, abierto, numeroWhatsApp, clienteLogueado, perfilCompleto, actualizarCantidad, quitarItem, vaciar, setComprador, cerrar } =
-    useCarrito();
+  const {
+    items,
+    comprador,
+    datosEnvio,
+    abierto,
+    numeroWhatsApp,
+    clienteLogueado,
+    perfilCompleto,
+    actualizarCantidad,
+    quitarItem,
+    vaciar,
+    setComprador,
+    setDatosEnvio,
+    cerrar,
+  } = useCarrito();
   const numeroConfigurado = numeroWhatsApp;
-  const { errores, campo, enviarPorWhatsApp, realizarPedido, temblando, enviandoPedido } = usePedidoWhatsApp({
+  const { errores, erroresEnvio, campo, campoEnvio, enviarPorWhatsApp, realizarPedido, temblando, enviandoPedido } = usePedidoWhatsApp({
     abierto,
     cerrar,
     items,
     comprador,
+    datosEnvio,
     numeroWhatsApp,
     clienteLogueado,
     perfilCompleto,
     setComprador,
+    setDatosEnvio,
     vaciar,
   });
 
@@ -134,6 +150,51 @@ export function CarritoDrawer() {
                   />
                 </div>
               </div>
+
+              {/* Solo con cuenta de cliente: es lo único que persiste en
+                  /api/cliente/pedidos y le hace seguimiento el admin — un
+                  comprador anónimo que solo manda por WhatsApp no lo necesita. */}
+              {clienteLogueado && (
+                <div className="mt-4 border-t border-ink-200 pt-4">
+                  <h3 className="mb-3 text-sm font-medium text-ink-900">Pago y envío</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <CampoSelectEnvio
+                      id="envio-metodoPago"
+                      etiqueta="Método de pago"
+                      value={datosEnvio.metodoPago}
+                      onChange={(v) => campoEnvio("metodoPago", v)}
+                      error={erroresEnvio.metodoPago}
+                      opciones={METODOS_PAGO_OPCIONES}
+                      etiquetas={METODOS_PAGO_ETIQUETA}
+                    />
+                    <CampoSelectEnvio
+                      id="envio-metodoEnvio"
+                      etiqueta="Método de envío"
+                      value={datosEnvio.metodoEnvio}
+                      onChange={(v) => campoEnvio("metodoEnvio", v)}
+                      error={erroresEnvio.metodoEnvio}
+                      opciones={METODOS_ENVIO_OPCIONES}
+                      etiquetas={METODOS_ENVIO_ETIQUETA}
+                    />
+                    <div className="col-span-2">
+                      <label htmlFor="envio-direccionEnvio" className="mb-1 block text-xs font-medium text-ink-500">
+                        Dirección de despacho
+                      </label>
+                      <textarea
+                        id="envio-direccionEnvio"
+                        value={datosEnvio.direccionEnvio}
+                        onChange={(e) => campoEnvio("direccionEnvio", e.target.value)}
+                        rows={2}
+                        aria-invalid={Boolean(erroresEnvio.direccionEnvio)}
+                        className={`w-full resize-none rounded-lg border bg-paper-raised px-3 py-2 text-sm focus:border-accent-600 ${
+                          erroresEnvio.direccionEnvio ? "border-danger-600" : "border-ink-200"
+                        }`}
+                      />
+                      {erroresEnvio.direccionEnvio && <p className="mt-1 text-xs text-danger-600">{erroresEnvio.direccionEnvio}</p>}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="border-t border-ink-200 px-4 py-4 sm:px-6">
@@ -290,6 +351,52 @@ function CampoComprador({
         aria-describedby={error ? `${id}-error` : undefined}
         className={`w-full rounded-lg border bg-paper-raised px-3 py-2 text-sm focus:border-accent-600 ${error ? "border-danger-600" : "border-ink-200"}`}
       />
+      {error && (
+        <p id={`${id}-error`} className="mt-1 text-xs text-danger-600">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function CampoSelectEnvio<T extends string>({
+  id,
+  etiqueta,
+  value,
+  onChange,
+  error,
+  opciones,
+  etiquetas,
+}: {
+  id: string;
+  etiqueta: string;
+  value: string;
+  onChange: (v: string) => void;
+  error?: string;
+  opciones: readonly T[];
+  etiquetas: Record<T, string>;
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className="mb-1 block text-xs font-medium text-ink-500">
+        {etiqueta}
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? `${id}-error` : undefined}
+        className={`w-full rounded-lg border bg-paper-raised px-3 py-2 text-sm focus:border-accent-600 ${error ? "border-danger-600" : "border-ink-200"}`}
+      >
+        <option value="">Elegir…</option>
+        {opciones.map((op) => (
+          <option key={op} value={op}>
+            {etiquetas[op]}
+          </option>
+        ))}
+      </select>
       {error && (
         <p id={`${id}-error`} className="mt-1 text-xs text-danger-600">
           {error}

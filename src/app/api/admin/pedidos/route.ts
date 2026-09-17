@@ -14,7 +14,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("pedidos")
-    .select("*, cliente:clientes(nombre, empresa, telefono, email)")
+    .select("*, cliente:clientes(nombre, empresa, telefono, email, rif, direccion, ciudad, estado_ubicacion, telefono_2)")
     .order("creado_en", { ascending: false });
 
   if (error) {
