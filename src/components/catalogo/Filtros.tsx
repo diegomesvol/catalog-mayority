@@ -163,6 +163,40 @@ export function Filtros({ marcas, generos, colores, categorias, lineas, tallas, 
         </button>
       </div>
 
+
+
+      <div id={idPanel} className={`${abierto ? "flex" : "hidden"} flex-col gap-4 lg:flex`}>
+        {/* Los 5 filtros unificados en un mismo look (dropdown + checkboxes):
+            grilla simétrica que reparte el ancho en partes iguales entre
+            columnas — 2 por fila en mobile, 3 en tablet, las 5 en una sola
+            fila en desktop ("lg"). Si el catálogo solo tiene un rubro
+            (categorías.length <= 1) ese dropdown ni se muestra — sin eso
+            para elegir, no tendría sentido ofrecerlo. */}
+        <div className="mx-auto grid w-full grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          {categorias.length > 1 && (
+            <DropdownMultiple etiqueta="Categoría" opciones={categorias} seleccionados={valor.categoria} onChange={(v) => set("categoria", v)} />
+          )}
+          <DropdownMultiple etiqueta="Marca" opciones={marcas} seleccionados={valor.marca} onChange={(v) => set("marca", v)} />
+          <DropdownMultiple etiqueta="Género" opciones={generos} seleccionados={valor.genero} onChange={(v) => set("genero", v)} />
+          <DropdownMultiple etiqueta="Línea" opciones={lineas} seleccionados={valor.linea} onChange={(v) => set("linea", v)} />
+          <DropdownMultiple etiqueta="Color" opciones={colores} seleccionados={valor.color} onChange={(v) => set("color", v)} />
+        </div>
+
+        <GrupoOpciones etiqueta="Talla" seleccionados={valor.tallas} opciones={tallas} onToggle={toggleTalla} />
+
+        <label
+          className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${valor.soloDisponibles ? "bg-ink-900 font-medium text-white" : "text-ink-900"
+            }`}
+        >
+          <input
+            type="checkbox"
+            checked={valor.soloDisponibles}
+            onChange={(e) => set("soloDisponibles", e.target.checked)}
+            className="h-4 w-4 rounded border-ink-300 text-accent-600 focus:ring-accent-600"
+          />
+          Solo mostrar productos con stock disponible
+        </label>
+      </div>
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
           {chips.map((chip) => (
@@ -190,39 +224,6 @@ export function Filtros({ marcas, generos, colores, categorias, lineas, tallas, 
         </div>
       )}
 
-      <div id={idPanel} className={`${abierto ? "flex" : "hidden"} flex-col gap-4 lg:flex`}>
-        {/* Los 5 filtros unificados en un mismo look (dropdown + checkboxes):
-            grilla simétrica que reparte el ancho en partes iguales entre
-            columnas — 2 por fila en mobile, 3 en tablet, las 5 en una sola
-            fila en desktop ("lg"). Si el catálogo solo tiene un rubro
-            (categorías.length <= 1) ese dropdown ni se muestra — sin eso
-            para elegir, no tendría sentido ofrecerlo. */}
-        <div className="mx-auto grid w-full grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-          {categorias.length > 1 && (
-            <DropdownMultiple etiqueta="Categoría" opciones={categorias} seleccionados={valor.categoria} onChange={(v) => set("categoria", v)} />
-          )}
-          <DropdownMultiple etiqueta="Marca" opciones={marcas} seleccionados={valor.marca} onChange={(v) => set("marca", v)} />
-          <DropdownMultiple etiqueta="Género" opciones={generos} seleccionados={valor.genero} onChange={(v) => set("genero", v)} />
-          <DropdownMultiple etiqueta="Línea" opciones={lineas} seleccionados={valor.linea} onChange={(v) => set("linea", v)} />
-          <DropdownMultiple etiqueta="Color" opciones={colores} seleccionados={valor.color} onChange={(v) => set("color", v)} />
-        </div>
-
-        <GrupoOpciones etiqueta="Talla" seleccionados={valor.tallas} opciones={tallas} onToggle={toggleTalla} />
-
-        <label
-          className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${
-            valor.soloDisponibles ? "bg-ink-900 font-medium text-white" : "text-ink-900"
-          }`}
-        >
-          <input
-            type="checkbox"
-            checked={valor.soloDisponibles}
-            onChange={(e) => set("soloDisponibles", e.target.checked)}
-            className="h-4 w-4 rounded border-ink-300 text-accent-600 focus:ring-accent-600"
-          />
-          Solo mostrar productos con stock disponible
-        </label>
-      </div>
     </div>
   );
 }
